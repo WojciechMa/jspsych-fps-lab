@@ -42,6 +42,11 @@ uint32_t DG_GetTicksMs();
 int DG_GetKey(int* pressed, unsigned char* key);
 void DG_SetWindowTitle(const char * title);
 
+#ifdef DG_MOUSE
+// jspsych-fps-lab: optional mouse input. Returns 1 if there was motion or a button change.
+int DG_GetMouse(int* buttons, int* dx);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

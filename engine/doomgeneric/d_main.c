@@ -195,6 +195,10 @@ void D_Display (void)
 		borderdrawcount = 3;
     }
 
+#ifdef __EMSCRIPTEN__
+    // jspsych-fps-lab: no screen melt; its wait loop would block the browser's main thread.
+    wipegamestate = gamestate;
+#endif
     // save the current screen if about to wipe
     if (gamestate != wipegamestate)
 		{

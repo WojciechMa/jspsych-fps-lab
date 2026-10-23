@@ -75,6 +75,8 @@ struct FB_ScreenInfo
 static struct FB_ScreenInfo s_Fb;
 int fb_scaling = 1;
 int usemouse = 0;
+// jspsych-fps-lab: opaque alpha byte, set by the "canvas" gfxmode.
+static uint32_t fb_alpha = 0;
 
 
 #ifdef CMAP256
@@ -183,7 +185,8 @@ void cmap_to_fb(uint8_t *out, uint8_t *in, int in_pixels)
             // Assuming RGBA8888
             pix = (c.r << s_Fb.red.offset) |
                   (c.g << s_Fb.green.offset) |
-                  (c.b << s_Fb.blue.offset);
+                  (c.b << s_Fb.blue.offset) |
+                  fb_alpha;
 
 #ifdef SYS_BIG_ENDIAN
             pix = swapLE32(pix);
@@ -258,6 +261,22 @@ void I_InitGraphics (void)
 		s_Fb.red.offset = 0;
 		s_Fb.transp.offset = 16;
 	}
+	else if (strcmp(mode, "canvas") == 0) {
+		// jspsych-fps-lab: R,G,B,A bytes in memory, the layout of HTML canvas ImageData.
+		s_Fb.bits_per_pixel = 32;
+
+		s_Fb.red.length = 8;
+		s_Fb.green.length = 8;
+		s_Fb.blue.length = 8;
+		s_Fb.transp.length = 8;
+
+		s_Fb.red.offset = 0;
+		s_Fb.green.offset = 8;
+		s_Fb.blue.offset = 16;
+		s_Fb.transp.offset = 24;
+
+		fb_alpha = 0xFFu << 24;
+	}
 	else
 		I_Error("Unknown gfxmode value: %s\n", mode);
 
@@ -308,6 +327,25 @@ void I_StartFrame (void)
 void I_StartTic (void)
 {
 	I_GetEvent();
+
+#ifdef DG_MOUSE
+	// jspsych-fps-lab: post the mouse motion and buttons gathered since the last tic.
+	{
+		int buttons, dx;
+
+		if (DG_GetMouse(&buttons, &dx))
+		{
+			event_t event;
+
+			event.type = ev_mouse;
+			event.data1 = buttons;
+			event.data2 = dx;
+			event.data3 = 0;
+			event.data4 = 0;
+			D_PostEvent(&event);
+		}
+	}
+#endif
 }
 
 void I_UpdateNoBlit (void)

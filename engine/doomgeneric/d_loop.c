@@ -781,6 +781,10 @@ void TryRunTics (void)
 	    return;
 	}
 
+#ifdef __EMSCRIPTEN__
+        // jspsych-fps-lab: never block the browser's main thread; the next frame retries.
+        return;
+#endif
         I_Sleep(1);
     }
 
