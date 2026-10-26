@@ -34,6 +34,7 @@
 #include "am_map.h"
 
 #include "p_local.h"
+#include "dg_hooks.h"
 
 #include "s_sound.h"
 
@@ -652,6 +653,7 @@ P_TouchSpecialThing
 	
     if (special->flags & MF_COUNTITEM)
 	player->itemcount++;
+    DG_OnPickup (special, toucher);
     P_RemoveMobj (special);
     player->bonuscount += BONUSADD;
     if (player == &players[consoleplayer])
@@ -670,6 +672,8 @@ P_KillMobj
     mobjtype_t	item;
     mobj_t*	mo;
 	
+    DG_OnKill (source, target);
+
     target->flags &= ~(MF_SHOOTABLE|MF_FLOAT|MF_SKULLFLY);
 
     if (target->type != MT_SKULL)
@@ -888,6 +892,7 @@ P_DamageMobj
     }
     
     // do the damage	
+    DG_OnDamage (target, inflictor, source, damage);
     target->health -= damage;	
     if (target->health <= 0)
     {

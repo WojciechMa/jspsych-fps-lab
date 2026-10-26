@@ -23,6 +23,7 @@
 #include "deh_main.h"
 #include "doomdef.h"
 #include "p_local.h"
+#include "dg_hooks.h"
 
 #include "g_game.h"
 
@@ -272,6 +273,8 @@ P_UseSpecialLine
   line_t*	line,
   int		side )
 {               
+
+    DG_OnUseLine (thing, line, side);
 
     // Err...
     // Use the back sides of VERY SPECIAL lines...

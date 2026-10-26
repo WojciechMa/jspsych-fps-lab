@@ -15,27 +15,33 @@ DOOM := dummy am_map doomdef doomstat dstrings d_event d_items d_iwad d_loop d_m
 	r_main r_plane r_segs r_sky r_things sha1 sounds statdump st_lib st_stuff \
 	s_sound tables v_video wi_stuff w_checksum w_file w_main w_wad z_zone \
 	w_file_stdc i_input i_video doomgeneric
+WEB := doomgeneric_web dg_trial dg_sound
 
-OBJS := $(DOOM:%=$(OBJ)/%.o) $(OBJ)/doomgeneric_web.o
+OBJS := $(DOOM:%=$(OBJ)/%.o) $(WEB:%=$(OBJ)/%.o)
 
-DEFINES := -DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 -DDG_MOUSE
+DEFINES := -DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 -DDG_MOUSE -DDG_WEB_SOUND
 # The 1990s Doom code trips modern clang diagnostics; only our own code gets warnings.
-VENDOR_CFLAGS := -O2 $(DEFINES) -MMD -MP -w \
+VENDOR_CFLAGS := -O2 $(DEFINES) -MMD -MP -w -Iweb \
 	-Wno-error=implicit-function-declaration -Wno-error=int-conversion \
 	-Wno-error=incompatible-function-pointer-types
 WEB_CFLAGS := -O2 $(DEFINES) -MMD -MP -Wall -I$(SRC)
 
-EXPORTS := _main,_dg_tick,_dg_key,_dg_mouse_move,_dg_mouse_buttons
+EXPORTS := main dg_tick dg_key dg_mouse_move dg_mouse_buttons dg_start_trial dg_abort_trial \
+	dg_stream_data dg_stream_take dg_stream_dropped dg_demo_data dg_demo_length
+empty :=
+space := $(empty) $(empty)
+comma := ,
+EXPORTED_FUNCTIONS := $(subst $(space),$(comma),$(strip $(EXPORTS:%=_%)))
 LDFLAGS := -O2 -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createDoomEngine \
 	-sENVIRONMENT=web -sINVOKE_RUN=0 -sINITIAL_MEMORY=64MB -sSTACK_SIZE=1MB \
-	-sEXPORTED_FUNCTIONS=$(EXPORTS) -sEXPORTED_RUNTIME_METHODS=FS,callMain,HEAPU8
+	-sEXPORTED_FUNCTIONS=$(EXPORTED_FUNCTIONS) -sEXPORTED_RUNTIME_METHODS=FS,callMain,HEAPU8
 
 all: $(OUT)/doom-engine.mjs
 
 $(OUT)/doom-engine.mjs: $(OBJS) | $(OUT)
 	$(CC) $(LDFLAGS) $(OBJS) -o $@
 
-$(OBJ)/doomgeneric_web.o: web/doomgeneric_web.c | $(OBJ)
+$(WEB:%=$(OBJ)/%.o): $(OBJ)/%.o: web/%.c | $(OBJ)
 	$(CC) $(WEB_CFLAGS) -c $< -o $@
 
 $(OBJ)/%.o: $(SRC)/%.c | $(OBJ)

@@ -369,6 +369,9 @@ typedef struct vissprite_s
    
     int			mobjflags;
     
+    // jspsych-fps-lab: the thing this sprite shows (NULL for weapon sprites).
+    struct mobj_s*	mobj;
+
 } vissprite_t;
 
 

@@ -71,10 +71,18 @@ static int snd_mport = 0;
 
 // Compiled-in sound modules:
 
+#ifdef DG_WEB_SOUND
+// jspsych-fps-lab: Web Audio sound effects (engine/web/dg_sound.c).
+extern sound_module_t DG_web_sound_module;
+#endif
+
 static sound_module_t *sound_modules[] = 
 {
     #ifdef FEATURE_SOUND
     &DG_sound_module,
+    #endif
+    #ifdef DG_WEB_SOUND
+    &DG_web_sound_module,
     #endif
     NULL,
 };

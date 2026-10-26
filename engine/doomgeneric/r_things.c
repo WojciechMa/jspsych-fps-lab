@@ -34,6 +34,7 @@
 #include "r_local.h"
 
 #include "doomstat.h"
+#include "dg_hooks.h"
 
 
 
@@ -365,6 +366,7 @@ void R_DrawMaskedColumn (column_t* column)
 
 	if (dc_yl <= dc_yh)
 	{
+	    dg_sprite_pixels += dc_yh - dc_yl + 1;
 	    dc_source = (byte *)column + 3;
 	    dc_texturemid = basetexturemid - (column->topdelta<<FRACBITS);
 	    // dc_source = (byte *)column + 3 - column->topdelta;
@@ -418,6 +420,7 @@ R_DrawVisSprite
     frac = vis->startfrac;
     spryscale = vis->scale;
     sprtopscreen = centeryfrac - FixedMul(dc_texturemid,spryscale);
+    dg_sprite_pixels = 0;
 	
     for (dc_x=vis->x1 ; dc_x<=vis->x2 ; dc_x++, frac += vis->xiscale)
     {
@@ -431,6 +434,7 @@ R_DrawVisSprite
 	R_DrawMaskedColumn (column);
     }
 
+    DG_OnSpriteDrawn (vis, dg_sprite_pixels);
     colfunc = basecolfunc;
 }
 
@@ -541,6 +545,7 @@ void R_ProjectSprite (mobj_t* thing)
     // store information in a vissprite
     vis = R_NewVisSprite ();
     vis->mobjflags = thing->flags;
+    vis->mobj = thing;
     vis->scale = xscale<<detailshift;
     vis->gx = thing->x;
     vis->gy = thing->y;
@@ -684,6 +689,7 @@ void R_DrawPSprite (pspdef_t* psp)
     // store information in a vissprite
     vis = &avis;
     vis->mobjflags = 0;
+    vis->mobj = NULL;
     vis->texturemid = (BASEYCENTER<<FRACBITS)+FRACUNIT/2-(psp->sy-spritetopoffset[lump]);
     vis->x1 = x1 < 0 ? 0 : x1;
     vis->x2 = x2 >= viewwidth ? viewwidth-1 : x2;	

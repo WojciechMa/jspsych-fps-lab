@@ -1,49 +1,82 @@
+:root {
+  color-scheme: dark;
+}
+
 html,
 body {
   height: 100%;
   margin: 0;
   background: #000;
   color: #ddd;
+}
+
+/* jsPsych's button colours assume a white page. */
+.jspsych-btn {
+  color: #eee;
+  background-color: #222;
+  border-color: #555;
+}
+
+@media (hover: hover) {
+  .jspsych-btn:hover {
+    background-color: #333;
+    border-color: #888;
+  }
+}
+
+.jspsych-btn:active {
+  background-color: #333;
+  border-color: #ddd;
+}
+
+.jspsych-btn:disabled {
+  color: #666;
+  background-color: #111;
+  border-color: #333;
+}
+
+.loader,
+.doom-stage {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  color: #ddd;
   font: 16px/1.4 system-ui, sans-serif;
 }
 
-.stage {
-  position: relative;
+.loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.doom-stage {
   display: grid;
   place-items: center;
-  height: 100%;
 }
 
 /* Doom's 320x200 frame was shown on 4:3 screens, so pixels are stretched vertically. */
-#screen {
+.doom-screen {
   width: min(100vw, calc(100vh * 4 / 3));
   aspect-ratio: 4 / 3;
   image-rendering: pixelated;
 }
 
-.overlay {
+.doom-overlay {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
   padding: 2rem;
   background: rgb(0 0 0 / 0.75);
   text-align: center;
   cursor: pointer;
 }
 
-.overlay[hidden] {
+.doom-overlay[hidden] {
   display: none;
-}
-
-.status {
-  position: absolute;
-  left: 0.5rem;
-  bottom: 0.5rem;
-  margin: 0;
-  font-size: 12px;
-  opacity: 0.6;
 }

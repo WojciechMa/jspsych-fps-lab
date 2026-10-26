@@ -5,7 +5,7 @@ as a jsPsych trial; "mode" means paradigm-specific game rules inside the engine.
 
 | # | id | Paradigm | What it studies | Needs | Main measures | Status |
 |---|---|---|---|---|---|---|
-| 1 | classic | Classic Doom level | Free play, general skill | Nothing extra (mode 0) | trajectory, aiming, risk, threat_rt | In progress: plays in M0, becomes a trial in M1 |
+| 1 | classic | Classic Doom level | Free play, general skill | Nothing extra (mode 0) | trajectory, aiming, risk, threat_rt | Playable as a jsPsych trial with raw recording (M1); measures in M2 |
 | 2 | maze | Maze / route learning | Spatial learning, wayfinding, shortcuts | Maps only | trajectory, roi | Planned (M4) |
 | 3 | hidden-goal | Hidden-goal arena (virtual Morris water maze) | Spatial memory from distant landmarks | Maps + "goal reached" end condition | trajectory, roi | Planned |
 | 4 | threat-corridor | Threat reaction corridor | Threat detection, how fast people turn toward a threat | Maps; mode optional for when monsters appear | threat_rt, aiming | Planned (M4) |

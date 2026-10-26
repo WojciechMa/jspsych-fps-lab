@@ -24,6 +24,7 @@
 
 #include "doomdef.h"
 #include "p_local.h"
+#include "dg_hooks.h"
 #include "sounds.h"
 
 #include "st_stuff.h"
@@ -555,6 +556,7 @@ P_SpawnMobj
     mobj->thinker.function.acp1 = (actionf_p1)P_MobjThinker;
 	
     P_AddThinker (&mobj->thinker);
+    DG_OnSpawn (mobj);
 
     return mobj;
 }
@@ -1044,6 +1046,7 @@ P_SpawnPlayerMissile
 			 finesine[an>>ANGLETOFINESHIFT]);
     th->momz = FixedMul( th->info->speed, slope);
 
+    DG_OnShot (source, an, slope, 0, th);
     P_CheckMissileSpawn (th);
 }
 

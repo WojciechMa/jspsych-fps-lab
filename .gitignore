@@ -2,4 +2,6 @@ node_modules/
 dist/
 engine/build/
 src/engine/build/
+# Full Freedoom IWADs are for local testing only; studies ship a trimmed IWAD (M4).
+public/wads/freedoom*.wad
 *.log

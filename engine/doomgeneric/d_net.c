@@ -37,6 +37,7 @@
 #include "deh_main.h"
 
 #include "d_loop.h"
+#include "dg_hooks.h"
 
 ticcmd_t *netcmds;
 
@@ -91,7 +92,12 @@ static void RunTic(ticcmd_t *cmds, boolean *ingame)
     if (advancedemo)
         D_DoAdvanceDemo ();
 
+    // jspsych-fps-lab: the world stands still while no trial runs; each tic that runs is recorded.
+    if (DG_TicsSuspended ())
+        return;
+
     G_Ticker ();
+    DG_OnTicEnd ();
 }
 
 static loop_interface_t doom_loop_interface = {

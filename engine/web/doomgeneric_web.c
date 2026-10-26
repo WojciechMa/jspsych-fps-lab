@@ -9,9 +9,12 @@
 #include "doomgeneric.h"
 #include "doomstat.h"
 #include "d_loop.h"
+#include "g_game.h"
 #include "i_video.h"
 #include "m_controls.h"
 #include "s_sound.h"
+
+#include "dg_hooks.h"
 
 void D_Display(void);
 
@@ -19,8 +22,8 @@ EM_JS(double, js_engine_clock_ms, (void), {
     return Module.engineClockMs();
 });
 
-EM_JS(void, js_draw_frame, (const void *pixels, int width, int height), {
-    Module.drawFrame(pixels, width, height);
+EM_JS(void, js_draw_frame, (const void *pixels, int width, int height, int frame), {
+    Module.drawFrame(pixels, width, height, frame);
 });
 
 #define KEY_QUEUE_SIZE 64
@@ -33,15 +36,21 @@ static int mouse_buttons = 0;
 static int mouse_dx = 0;
 static int mouse_changed = 0;
 
+static int current_frame = 0;
+
 void DG_Init(void)
 {
     joybspeed = 29;  // >= MAX_JOY_BUTTONS means always run (see G_BuildTiccmd)
     dclick_use = 0;
+    // Key 0 is never sent, so the demo-quit key (which ends in I_Error) can't fire.
+    key_demo_quit = 0;
+    // Unlimited demo length instead of I_Error when the 128 KiB buffer fills.
+    vanilla_demo_limit = 0;
 }
 
 void DG_DrawFrame(void)
 {
-    js_draw_frame(DG_ScreenBuffer, DOOMGENERIC_RESX, DOOMGENERIC_RESY);
+    js_draw_frame(DG_ScreenBuffer, DOOMGENERIC_RESX, DOOMGENERIC_RESY, current_frame);
 }
 
 void DG_SleepMs(uint32_t ms)
@@ -123,7 +132,10 @@ EMSCRIPTEN_KEEPALIVE void dg_tick(void)
     S_UpdateSounds(players[consoleplayer].mo);
 
     if (screenvisible)
+    {
+        current_frame = DG_OnFrameStart();
         D_Display();
+    }
 }
 
 int main(int argc, char **argv)

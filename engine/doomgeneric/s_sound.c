@@ -35,6 +35,7 @@
 #include "m_argv.h"
 
 #include "p_local.h"
+#include "dg_hooks.h"
 #include "w_wad.h"
 #include "z_zone.h"
 
@@ -399,6 +400,7 @@ void S_StartSound(void *origin_p, int sfx_id)
 
     origin = (mobj_t *) origin_p;
     volume = snd_SfxVolume;
+    DG_OnSound (origin_p, sfx_id);
 
     // check for bogus sound #
     if (sfx_id < 1 || sfx_id > NUMSFX)

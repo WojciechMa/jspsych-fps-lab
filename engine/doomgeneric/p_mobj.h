@@ -277,6 +277,10 @@ typedef struct mobj_s
     // Thing being chased/attacked for tracers.
     struct mobj_s*	tracer;	
     
+    // jspsych-fps-lab: stable id (sequential per trial) and the last frame it was drawn in.
+    int			dg_id;
+    int			dg_drawn_frame;
+
 } mobj_t;
 
 

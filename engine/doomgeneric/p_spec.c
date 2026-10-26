@@ -36,6 +36,7 @@
 
 #include "r_local.h"
 #include "p_local.h"
+#include "dg_hooks.h"
 
 #include "g_game.h"
 
@@ -508,6 +509,7 @@ P_CrossSpecialLine
     int		ok;
 
     line = &lines[linenum];
+    DG_OnCrossLine (thing, linenum, side);
     
     //	Triggers that other things can activate
     if (!thing->player)

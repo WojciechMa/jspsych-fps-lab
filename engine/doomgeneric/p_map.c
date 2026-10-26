@@ -30,6 +30,7 @@
 #include "m_argv.h"
 #include "m_misc.h"
 #include "p_local.h"
+#include "dg_hooks.h"
 
 #include "s_sound.h"
 
@@ -1052,6 +1053,8 @@ boolean PTR_ShootTraverse (intercept_t* in)
     else
 	P_SpawnBlood (x,y,z, la_damage);
 
+    DG_OnHit (shootthing, th);
+
     if (la_damage)
 	P_DamageMobj (th, shootthing, shootthing, la_damage);
 
@@ -1117,6 +1120,8 @@ P_LineAttack
     fixed_t	x2;
     fixed_t	y2;
 	
+    DG_OnShot (t1, angle, slope, distance, NULL);
+
     angle >>= ANGLETOFINESHIFT;
     shootthing = t1;
     la_damage = damage;

@@ -1,3 +1,4 @@
 engine/doomgeneric is vendored from https://github.com/ozkl/doomgeneric (directory doomgeneric/)
 commit e257a09527062bfb986b6e5e0780839b6cbd5b71 (2026-10-11)
-Our changes are marked with "jspsych-fps-lab:" comments; diff against the vendoring commit to see them.
+Our changes are marked with "jspsych-fps-lab:" comments or are calls to the DG_* hooks in
+engine/web/dg_hooks.h; diff against the vendoring commit to see them all.

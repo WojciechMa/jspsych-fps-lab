@@ -18,5 +18,9 @@
   "devDependencies": {
     "typescript": "^7.0.2",
     "vite": "^8.3.5"
+  },
+  "dependencies": {
+    "@jspsych/plugin-html-button-response": "^2.1.0",
+    "jspsych": "^8.3.0"
   }
 }
