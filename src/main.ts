@@ -6,10 +6,13 @@ import { initJsPsych } from 'jspsych';
 import { DoomEngine } from './engine/engine';
 import DoomTrialPlugin, { useDoomEngine } from './plugins/plugin-doom-trial';
 
-// Dev builds only: ?iwad=freedoom2.wad tries another IWAD from public/wads.
-const requestedIwad = import.meta.env.DEV ? new URLSearchParams(location.search).get('iwad') : null;
-const iwadName = requestedIwad && /^[a-z0-9-]+\.wad$/.test(requestedIwad) ? requestedIwad : 'miniwad.wad';
-const WAD = { name: iwadName, url: `${import.meta.env.BASE_URL}wads/${iwadName}` };
+// The Pages workflow adds Freedoom, gzipped. Dev builds play miniwad, or ?iwad=<name>.wad from
+// public/wads.
+const requestedIwad = new URLSearchParams(location.search).get('iwad');
+const devIwad = requestedIwad && /^[a-z0-9-]+\.wad$/.test(requestedIwad) ? requestedIwad : 'miniwad.wad';
+const WAD = import.meta.env.DEV
+  ? { name: devIwad, url: `${import.meta.env.BASE_URL}wads/${devIwad}` }
+  : { name: 'freedoom2.wad', url: `${import.meta.env.BASE_URL}wads/freedoom2.wad.gz` };
 
 const loader = element<HTMLDivElement>('#loader');
 const message = element<HTMLParagraphElement>('#message');
@@ -44,7 +47,10 @@ async function fetchWithProgress(
     data.set(chunk, offset);
     offset += chunk.length;
   }
-  return data;
+  // gzip magic number: .gz files arrive without Content-Encoding, so the browser leaves them packed.
+  if (data[0] !== 0x1f || data[1] !== 0x8b) return data;
+  const unpacked = new Blob([data]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(unpacked).arrayBuffer());
 }
 
 function dataFileName(): string {

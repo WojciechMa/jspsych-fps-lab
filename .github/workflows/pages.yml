@@ -27,6 +27,18 @@ jobs:
       - run: npm run build:engine
         env:
           CONTAINER_ENGINE: docker
+      # Public demo IWAD until the trimmed one (M4); Pages sends .wad files uncompressed.
+      - name: Add Freedoom
+        env:
+          FREEDOOM_VERSION: 0.13.0
+          FREEDOOM_SHA256: 3f9b264f3e3ce503b4fb7f6bdcb1f419d93c7b546f4df3e874dd878db9688f59
+        run: |
+          curl -fsSL -o freedoom.zip "https://github.com/freedoom/freedoom/releases/download/v$FREEDOOM_VERSION/freedoom-$FREEDOOM_VERSION.zip"
+          echo "$FREEDOOM_SHA256  freedoom.zip" | sha256sum -c -
+          unzip -j freedoom.zip "freedoom-$FREEDOOM_VERSION/freedoom2.wad" "freedoom-$FREEDOOM_VERSION/COPYING.txt" "freedoom-$FREEDOOM_VERSION/CREDITS.txt" -d freedoom
+          gzip -9 -n -c freedoom/freedoom2.wad > public/wads/freedoom2.wad.gz
+          cp freedoom/COPYING.txt public/wads/freedoom-COPYING.txt
+          cp freedoom/CREDITS.txt public/wads/freedoom-CREDITS.txt
       - run: npm run build
       - uses: actions/upload-pages-artifact@v5
         with:

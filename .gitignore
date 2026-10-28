@@ -2,6 +2,6 @@ node_modules/
 dist/
 engine/build/
 src/engine/build/
-# Full Freedoom IWADs are for local testing only; studies ship a trimmed IWAD (M4).
-public/wads/freedoom*.wad
+# Freedoom files come from the Pages workflow (or a local copy for testing); never committed.
+public/wads/freedoom*
 *.log

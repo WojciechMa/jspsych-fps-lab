@@ -5,7 +5,9 @@ static site on GitHub Pages. The project plan and rules are in [AGENTS.md](AGENT
 paradigms are in [docs/paradigms.md](docs/paradigms.md).
 
 Status: M1. A Doom map runs as a jsPsych trial (`doom-trial` plugin) that records the play; the
-data can be downloaded as JSON at the end. Nothing is uploaded yet (DataPipe comes in M3).
+data can be downloaded as JSON at the end. Nothing is uploaded yet (DataPipe comes in M3). The
+public site plays MAP01 of Freedoom Phase 2: the full IWAD, gzipped (about 11 MB), until the
+trimmed IWAD of M4 exists.
 
 ## Build and run
 
@@ -22,8 +24,10 @@ npm run build          # type-check + production build in dist/
 Debian container). The container tool is picked automatically; set `CONTAINER_ENGINE=podman` or
 `docker` to force one.
 
-miniwad has no monsters. In `npm run dev`, `?iwad=freedoom2.wad` loads another IWAD from
-`public/wads` instead, e.g. Freedoom Phase 2 copied there (git-ignored, not deployed).
+`npm run dev` plays miniwad, which has no monsters and is meant for development and tests only;
+`?iwad=freedoom2.wad` loads another IWAD from `public/wads` instead, e.g. Freedoom Phase 2 copied
+there (git-ignored). Production builds load `wads/freedoom2.wad.gz`, which the Pages workflow
+downloads from the pinned Freedoom release and gzips.
 
 Behind a TLS-intercepting proxy, npm may fail with `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`. Setting
 `NODE_OPTIONS=--use-system-ca` makes Node trust the operating system's certificates.
@@ -69,5 +73,8 @@ resolution even on faster displays.
   `jspsych-fps-lab:` comments.
 - Development IWAD: [miniwad](https://github.com/fragglet/miniwad), BSD-3-Clause, see
   [public/wads/miniwad-LICENSE.txt](public/wads/miniwad-LICENSE.txt).
+- Public demo IWAD: [Freedoom](https://github.com/freedoom/freedoom) Phase 2 v0.13.0,
+  BSD-3-Clause. The Pages workflow publishes its license and credits next to it as
+  `wads/freedoom-COPYING.txt` and `wads/freedoom-CREDITS.txt`.
 - Build tools that are not shipped: emscripten, deutex, [wadptr](https://github.com/fragglet/wadptr)
   (GPL-2.0), Vite, TypeScript.
