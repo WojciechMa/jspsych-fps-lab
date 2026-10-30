@@ -35,6 +35,14 @@ body {
   border-color: #333;
 }
 
+/* The list of recorded data on the start screen, left-aligned inside jsPsych's centred layout. */
+.recorded {
+  display: inline-block;
+  max-width: 48em;
+  margin: 0;
+  text-align: left;
+}
+
 .loader,
 .doom-stage {
   position: fixed;

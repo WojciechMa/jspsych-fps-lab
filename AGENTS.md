@@ -86,7 +86,9 @@ the same mode, params and seed must reproduce the trial exactly.
 
 ## Measures
 Interface: { id, version, label, participantDescription, needs[], estBytesPerMin, paramsSchema,
-             create(ctx, params) → { onTic?, onEvent?, onFrame?, finish() → { summary, raw? } } }
+             create(ctx, params) → { onTic?, onEvent?, onFrame?, onPage?, finish(end) →
+             { summary, raw? } } }. Measures are pure TypeScript (no DOM except input_log's
+             listeners on ctx.inputTarget), so the M5 replay can run them in Node.
 MVP set:
 1. session_quality: frame times, dropped frames, blur/focus, fullscreen/pointer-lock exits, pauses
 2. input_log: raw key/mouse events during trials only, on the performance.now() clock

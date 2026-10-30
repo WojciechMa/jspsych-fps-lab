@@ -18,14 +18,15 @@
 
 #define DEMOMARKER 0x80
 #define STREAM_WORDS (1 << 18)
-#define TIC_WORDS 25
+#define TIC_WORDS 26
 #define MONSTER_WORDS 7
 #define EVENT_WORDS 7
+#define VISIBLE_WORDS 7
 #define ROI_TAG_MIN 900
 #define ROI_TAG_MAX 999
 
-// Keep in sync with src/engine/recorder.ts.
-enum { REC_TIC = 1, REC_EVENT, REC_FRAME, REC_VISIBLE, REC_END };
+// Keep in sync with src/engine/stream.ts.
+enum { REC_TIC = 1, REC_EVENT, REC_FRAME, REC_VISIBLE, REC_END, REC_START };
 enum {
     EV_DAMAGE = 1, EV_KILL, EV_PICKUP, EV_SHOT, EV_HIT, EV_USE, EV_CROSS, EV_SOUND,
     EV_ROI_ENTER, EV_ROI_EXIT, EV_DEATH, EV_EXIT
@@ -196,7 +197,8 @@ static void RecordTic(void)
         r[21] = player->cmd.sidemove;
         r[22] = player->cmd.angleturn;
         r[23] = player->cmd.buttons;
-        r[24] = count;
+        r[24] = sector->special;
+        r[25] = count;
 
         r += TIC_WORDS;
         for (th = thinkercap.next; th != &thinkercap; th = th->next)
@@ -262,7 +264,7 @@ void DG_OnShot(mobj_t *shooter, unsigned int angle, int slope, int distance, mob
 void DG_OnHit(mobj_t *shooter, mobj_t *target)
 {
     if (shooter->player != NULL)
-        Event(EV_HIT, IdOf(shooter), IdOf(target), target->type, 0, 0);
+        Event(EV_HIT, IdOf(shooter), IdOf(target), target->type, IsMonster(target), 0);
 }
 
 void DG_OnUseLine(mobj_t *thing, line_t *line, int side)
@@ -341,7 +343,7 @@ void DG_OnSpriteDrawn(vissprite_t *vis, int pixels)
         return;
 
     mo->dg_drawn_frame = frame_number;
-    r = Record(REC_VISIBLE, 5);
+    r = Record(REC_VISIBLE, VISIBLE_WORDS);
     if (r != NULL)
     {
         r[0] = mo->dg_id;
@@ -349,6 +351,8 @@ void DG_OnSpriteDrawn(vissprite_t *vis, int pixels)
         r[2] = pixels;
         r[3] = mo->subsector->sector->lightlevel;
         r[4] = vis->colormap == NULL;  // spectre-style fuzz
+        r[5] = mo->x;
+        r[6] = mo->y;
     }
 }
 
@@ -356,6 +360,8 @@ void DG_OnSpriteDrawn(vissprite_t *vis, int pixels)
 // tics = time limit in game tics, 0 for none.
 EMSCRIPTEN_KEEPALIVE void dg_start_trial(int map, int skill, int flags, int tics)
 {
+    int32_t *r;
+
     ReleaseDemo();
     stream_used = 0;
     stream_dropped = 0;
@@ -376,6 +382,10 @@ EMSCRIPTEN_KEEPALIVE void dg_start_trial(int map, int skill, int flags, int tics
     G_InitNew((skill_t) skill, 1, map);
     G_BeginRecording();
     trial_state = TRIAL_RUNNING;
+
+    r = Record(REC_START, 1);
+    if (r != NULL)
+        r[0] = IdOf(players[consoleplayer].mo);
 }
 
 EMSCRIPTEN_KEEPALIVE void dg_abort_trial(void)

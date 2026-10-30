@@ -4,10 +4,10 @@ Behavioral experiments on the Doom engine, run as jsPsych trials in the browser 
 static site on GitHub Pages. The project plan and rules are in [AGENTS.md](AGENTS.md); planned
 paradigms are in [docs/paradigms.md](docs/paradigms.md).
 
-Status: M1. A Doom map runs as a jsPsych trial (`doom-trial` plugin) that records the play; the
-data can be downloaded as JSON at the end. Nothing is uploaded yet (DataPipe comes in M3). The
-public site plays MAP01 of Freedoom Phase 2: the full IWAD, gzipped (about 11 MB), until the
-trimmed IWAD of M4 exists.
+Status: M2. A Doom map runs as a jsPsych trial (`doom-trial` plugin); researcher-selected measures
+turn the play into data, and the start screen lists what they record. The data can be downloaded
+as JSON at the end. Nothing is uploaded yet (DataPipe comes in M3). The public site plays MAP01
+of Freedoom Phase 2: the full IWAD, gzipped (about 11 MB), until the trimmed IWAD of M4 exists.
 
 ## Build and run
 
@@ -17,6 +17,7 @@ Requirements: Node.js 24 (see `.nvmrc`) and Podman or Docker for the engine buil
 npm ci
 npm run build:engine   # compiles engine/ to src/engine/build in the pinned emscripten image
 npm run dev            # http://localhost:5173
+npm test               # measure and stream-decoder tests on synthetic data (Vitest)
 npm run build          # type-check + production build in dist/
 ```
 
@@ -40,23 +41,33 @@ stops while paused.
 
 ## Recorded data
 
-Each `doom-trial` returns its settings and:
+Only the active measures' outputs are stored. A `doom-trial` takes `measures`: measure ids or
+`{ id, params }` objects (default: all of them). Its data row holds:
 
-- `end_reason` (`exit`, `secret_exit`, `death`, `timeout`, `aborted` or `error`) and
-  `duration_tics`.
-- `tics`: one row per tic with position, view angle, momentum, health, armor, weapon, ammo,
-  sector and sector tag, kill/item/secret counts, and the tic's movement, turning and buttons.
-- `monsters`: per tic, each monster that is awake or was drawn in the last frame.
-- `events`: damage, kill, pickup, shot, hit, use, line crossing, sound, ROI enter/exit, death
-  and exit.
-- `frames` and `visible`: each rendered frame, and the monsters actually drawn in it with their
-  pixel count and sector light level.
-- `pauses`: tic, cause and duration.
-- `demo`: the whole trial as a Doom 1.91 (`-longtics`) demo, base64-encoded; `engine`: SHA-256
-  of the `.wasm`, the git commit and the WAD hashes needed to replay it.
+- the trial: `paradigm`, `mode`, `seed`, `input_profile`, `map`, `skill`, `time_limit`,
+  `no_monsters`, `sound`;
+- the outcome: `end_reason` (`exit`, `secret_exit`, `death`, `timeout`, `aborted` or `error`),
+  `duration_tics`, `player_id`, `unadjusted_movement`, `stream_dropped` (should be 0);
+- `measures`: id, version and parameters of each active measure;
+- `results`: per measure id, `{ summary, raw }` (or `{ error }` if the measure failed);
+- `engine`: SHA-256 of the `.wasm`, the git commit and the WAD hashes.
 
-Tables are stored as columns. Positions are in map units, angles in degrees counter-clockwise
-from east, times in ms on the `performance.now()` clock. Thing ids are stable within a trial.
+| Measure | Summary | Raw |
+|---|---|---|
+| `session_quality` | frame times, dropped frames, pauses by cause | pauses (frame intervals optional) |
+| `input_log` | event counts | game keys, mouse buttons and mouse moves with `event.timeStamp` |
+| `trajectory` | path length, speed, turning, coverage, revisits, teleports | x, y, angle per tic |
+| `roi` | visits and time per ROI tag (sectors tagged 900–999) | enter/exit tics |
+| `threat_rt` | monsters seen, median reaction times | per monster: first visible frame, turn-toward, first shot, hit, kill |
+| `aiming` | discharges, accuracy, median angular error | per discharge: weapon, pellets, hits, target, error |
+| `risk` | damage taken by source, hazard-floor crossings, engagements at low health | engagements |
+| `demo` | format, size, mode/params/seed, engine and WAD hashes | the Doom 1.91 (`-longtics`) demo, base64 |
+
+Every threshold is a measure parameter with a documented default; see `paramsSchema` in
+`src/measures/*.ts`. Tables are stored as columns. Positions are in map units, angles in degrees
+counter-clockwise from east, times in ms on the `performance.now()` clock; reaction times are also
+given in tics, which pauses don't affect. Thing ids are stable within a trial; monster `type` is
+Doom's `mobjtype_t` number (`engine/doomgeneric/info.h`).
 
 ## Timing
 
@@ -77,4 +88,4 @@ resolution even on faster displays.
   BSD-3-Clause. The Pages workflow publishes its license and credits next to it as
   `wads/freedoom-COPYING.txt` and `wads/freedoom-CREDITS.txt`.
 - Build tools that are not shipped: emscripten, deutex, [wadptr](https://github.com/fragglet/wadptr)
-  (GPL-2.0), Vite, TypeScript.
+  (GPL-2.0), Vite, TypeScript, Vitest.

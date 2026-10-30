@@ -1,9 +1,10 @@
-// M1 demo: one Doom trial in a jsPsych timeline, ending with a JSON download of the data.
+// Demo timeline: one Doom trial with the default measures, ending with a JSON download of the data.
 import 'jspsych/css/jspsych.css';
 import './style.css';
 import HtmlButtonResponsePlugin from '@jspsych/plugin-html-button-response';
 import { initJsPsych } from 'jspsych';
 import { DoomEngine } from './engine/engine';
+import { DEFAULT_MEASURES, participantDescriptions } from './measures/registry';
 import DoomTrialPlugin, { useDoomEngine } from './plugins/plugin-doom-trial';
 
 // The Pages workflow adds Freedoom, gzipped. Dev builds play miniwad, or ?iwad=<name>.wad from
@@ -72,6 +73,9 @@ async function main(): Promise<void> {
     },
   });
 
+  const measures = DEFAULT_MEASURES;
+  const recorded = participantDescriptions(measures).map((line) => `<li>${line}</li>`).join('');
+
   await jsPsych.run([
     {
       type: HtmlButtonResponsePlugin,
@@ -80,15 +84,13 @@ async function main(): Promise<void> {
         <p>Find the exit. The trial ends at the exit, if you die, or after 60 seconds of play.</p>
         <p>W A S D move, the mouse turns, left click fires, E opens doors and presses switches,
         1–7 switch weapons. Esc pauses the game.</p>
-        <p>While you play, the game records 35 times per second your position, view direction,
-        movement and button presses, health and ammunition, and the monsters that are awake or
-        on screen. It also logs game events (shots, hits, damage, pickups, doors and switches,
-        death, exit), pauses, and a replay of the run. No name or other personal details are
-        recorded. The data stays in this browser until you download it at the end; nothing is
-        uploaded.</p>`,
+        <p>While you play, the game records:</p>
+        <ul class="recorded">${recorded}</ul>
+        <p>No name or other personal details are recorded. The data stays in this browser until you
+        download it at the end; nothing is uploaded.</p>`,
       choices: ['Continue'],
     },
-    { type: DoomTrialPlugin, map: 1, skill: 3, time_limit: 60 },
+    { type: DoomTrialPlugin, map: 1, skill: 3, time_limit: 60, measures },
     {
       type: HtmlButtonResponsePlugin,
       stimulus: '<p>The trial is over. The recorded data stays in this browser until you download it.</p>',

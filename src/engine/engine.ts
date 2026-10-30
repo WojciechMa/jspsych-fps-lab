@@ -3,31 +3,11 @@
 import createDoomEngine, { type DoomEngineModule } from 'doom-engine-build/doom-engine.mjs';
 import wasmUrl from 'doom-engine-build/doom-engine.wasm?url';
 import { EngineAudio } from './audio';
-import { TrialRecorder, type TrialRecording } from './recorder';
+import { KEY_BINDINGS } from './keys';
+import { StreamDecoder } from './stream';
+import type { EndReason, EngineInfo, PauseCause, TrialEnd, TrialListener } from './types';
 
 const TICS_PER_SECOND = 35;
-
-// Doom key codes from engine/doomgeneric/doomkeys.h.
-const KEY_UP = 0xad;
-const KEY_DOWN = 0xaf;
-const KEY_STRAFE_LEFT = 0xa0;
-const KEY_STRAFE_RIGHT = 0xa1;
-const KEY_USE = 0xa2;
-
-const KEY_BINDINGS: Readonly<Record<string, number>> = {
-  KeyW: KEY_UP,
-  KeyS: KEY_DOWN,
-  KeyA: KEY_STRAFE_LEFT,
-  KeyD: KEY_STRAFE_RIGHT,
-  KeyE: KEY_USE,
-  Digit1: 0x31,
-  Digit2: 0x32,
-  Digit3: 0x33,
-  Digit4: 0x34,
-  Digit5: 0x35,
-  Digit6: 0x36,
-  Digit7: 0x37,
-};
 
 const LEFT_BUTTON = 1;
 
@@ -42,17 +22,14 @@ export interface TrialOptions {
   sound: boolean;
 }
 
-export interface EngineInfo {
-  wasm_sha256: string;
-  commit: string;
-  wads: { name: string; bytes: number; sha256: string }[];
-}
-
-type PauseCause = 'pointer_lock_lost' | 'window_blur' | 'page_hidden';
-
 interface ActiveTrial {
-  recorder: TrialRecorder;
-  finish: (recording: TrialRecording) => void;
+  listener: TrialListener;
+  decoder: StreamDecoder;
+  unadjusted: boolean;
+  playerId: number;
+  nextTic: number;
+  end: { reason: EndReason; tic: number } | null;
+  finish: (end: TrialEnd) => void;
   fail: (error: Error) => void;
 }
 
@@ -72,7 +49,7 @@ export class DoomEngine {
   private running = false;
   private frameRequest = 0;
   private trial: ActiveTrial | null = null;
-  private trialResult: Promise<TrialRecording> | null = null;
+  private trialResult: Promise<TrialEnd> | null = null;
   private readonly frameTimes = new Map<number, number>();
   private readonly heldKeys = new Set<number>();
   private buttons = 0;
@@ -128,17 +105,43 @@ export class DoomEngine {
     return engine;
   }
 
-  /** Starts a trial. Call it from a click handler: it captures the mouse and starts audio. */
-  async startTrial(options: TrialOptions): Promise<void> {
+  /**
+   * Starts a trial whose data goes to `listener`. Call it from a click handler: it captures the
+   * mouse and starts audio.
+   */
+  async startTrial(options: TrialOptions, listener: TrialListener): Promise<void> {
     if (this.trial) throw new Error('A trial is already running.');
     const audioReady = this.audio.unlock();
     const unadjusted = await lockPointer(this.canvas);
     await audioReady;
     this.audio.setMuted(!options.sound);
 
-    const recorder = new TrialRecorder(unadjusted);
     this.trialResult = new Promise((finish, fail) => {
-      this.trial = { recorder, finish, fail };
+      const trial: ActiveTrial = {
+        listener,
+        unadjusted,
+        playerId: 0,
+        nextTic: 0,
+        end: null,
+        finish,
+        fail,
+        decoder: new StreamDecoder({
+          onStart: (playerId) => {
+            trial.playerId = playerId;
+            listener.onStart?.(playerId);
+          },
+          onTic: (tic) => {
+            trial.nextTic = tic.tic + 1;
+            listener.onTic?.(tic);
+          },
+          onEvent: (event) => listener.onEvent?.(event),
+          onFrame: (frame) => listener.onFrame?.(frame),
+          onEnd: (reason, tic) => {
+            trial.end = { reason, tic };
+          },
+        }),
+      };
+      this.trial = trial;
     });
     const ticLimit = options.timeLimit ? Math.round(options.timeLimit * TICS_PER_SECOND) : 0;
     this.module._dg_start_trial(options.map, options.skill - 1, options.noMonsters ? 1 : 0, ticLimit);
@@ -146,8 +149,8 @@ export class DoomEngine {
     this.run();
   }
 
-  /** Resolves with the recording when the trial ends: exit, death or time limit. */
-  result(): Promise<TrialRecording> {
+  /** Resolves when the trial ends: exit, death or time limit. */
+  result(): Promise<TrialEnd> {
     if (!this.trialResult) throw new Error('No trial has started.');
     return this.trialResult;
   }
@@ -158,7 +161,8 @@ export class DoomEngine {
     const audioReady = this.audio.unlock();
     await lockPointer(this.canvas);
     await audioReady;
-    this.trial.recorder.pauseEnded(performance.now());
+    const trial = this.trial;
+    trial.listener.onPage?.({ type: 'resume', tic: trial.nextTic, timeMs: performance.now() });
     this.run();
   }
 
@@ -179,10 +183,11 @@ export class DoomEngine {
   }
 
   private pause(cause: PauseCause): void {
-    if (!this.running || !this.trial) return;
+    const trial = this.trial;
+    if (!this.running || !trial) return;
     this.stop();
     this.audio.suspend();
-    this.trial.recorder.pauseStarted(cause, performance.now());
+    trial.listener.onPage?.({ type: 'pause', cause, tic: trial.nextTic, timeMs: performance.now() });
     this.onPause?.();
   }
 
@@ -191,12 +196,12 @@ export class DoomEngine {
     const callTime = performance.now();
     try {
       this.module._dg_tick();
+      this.drainStream(callTime);
     } catch (error) {
       this.fail(error);
       return;
     }
-    this.drainStream(callTime);
-    if (this.trial?.recorder.endReason) {
+    if (this.trial?.end) {
       this.finish();
       return;
     }
@@ -207,20 +212,26 @@ export class DoomEngine {
     const words = this.module._dg_stream_take();
     if (words > 0 && this.trial) {
       const start = this.module._dg_stream_data();
-      this.trial.recorder.add(new Int32Array(this.module.HEAPU8.buffer, start, words), callTime, this.frameTimes);
+      this.trial.decoder.add(new Int32Array(this.module.HEAPU8.buffer, start, words), callTime, this.frameTimes);
     }
     this.frameTimes.clear();
   }
 
   private finish(): void {
     const trial = this.trial;
-    if (!trial) return;
+    if (!trial?.end) return;
     this.trial = null;
     this.stop();
     this.audio.stopAll();
     const start = this.module._dg_demo_data();
-    const demo = this.module.HEAPU8.slice(start, start + this.module._dg_demo_length());
-    trial.finish(trial.recorder.result(demo, this.module._dg_stream_dropped()));
+    trial.finish({
+      reason: trial.end.reason,
+      durationTics: trial.end.tic,
+      playerId: trial.playerId,
+      unadjustedMovement: trial.unadjusted,
+      demo: this.module.HEAPU8.slice(start, start + this.module._dg_demo_length()),
+      streamDropped: this.module._dg_stream_dropped(),
+    });
   }
 
   private fail(error: unknown): void {
