@@ -17,7 +17,7 @@ interface Pause {
 
 export const sessionQuality: Measure<Params> = {
   id: 'session_quality',
-  version: '1.0.0',
+  version: '1.1.0',
   label: 'Session quality',
   participantDescription:
     'How smoothly the game ran on your computer, and when and why it paused (for example when you switched to another window).',
@@ -69,12 +69,13 @@ export const sessionQuality: Measure<Params> = {
         for (const pause of pauses) byCause[pause.cause] = (byCause[pause.cause] ?? 0) + 1;
         const nullable = (value: number | null, decimals: number) => (value === null ? null : round(value, decimals));
         return {
+          // Frames are drawn only when a tic has run, so the rate is at most 35 Hz, not the display's.
           summary: {
             frames,
             median_frame_ms: nullable(typical, 2),
             p95_frame_ms: nullable(percentile(intervals, 95), 2),
             max_frame_ms: nullable(intervals.length ? Math.max(...intervals) : null, 2),
-            refresh_hz: typical ? round(1000 / typical, 1) : null,
+            frame_rate_hz: typical ? round(1000 / typical, 1) : null,
             dropped_frames: dropped,
             pauses: pauses.length,
             pause_ms: round(pauses.reduce((sum, pause) => sum + (pause.duration_ms ?? 0), 0), 1),
