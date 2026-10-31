@@ -143,7 +143,9 @@ M1 hooks + jsPsych plugin; trial ends on exit/death/timeout; JSON download.
 M2 measure registry + MVP measures + auto consent list; Vitest tests on synthetic streams.
 M3 study configs, schema, builder page, DataPipe.
 M4 paradigm registry + engine modes; first paradigms with custom maps: maze navigation,
-   threat-RT corridor, two-door bandit; trimmed Freedoom IWAD.
+   threat-RT corridor, two-door bandit; trimmed Freedoom IWAD; researcher-supplied status-bar
+   faces (photos → the 42 STF* patches by script, selectable per study/trial; never participant
+   photos).
 M5 offline replay (Node CLI, also used by CI): demo + WADs + mode/params/seed → recomputed
    engine-derived measures; must match live data (input_log and session_quality excluded).
 
