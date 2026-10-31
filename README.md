@@ -58,7 +58,7 @@ Only the active measures' outputs are stored. A `doom-trial` takes `measures`: m
 | `input_log` | event counts | game keys, mouse buttons and mouse moves with `event.timeStamp` |
 | `trajectory` | path length, speed, turning, coverage, revisits, teleports | x, y, angle per tic |
 | `roi` | visits and time per ROI tag (sectors tagged 900–999) | enter/exit tics |
-| `threat_rt` | monsters seen, median reaction times | per monster: first visible frame, turn-toward, first shot, hit, kill |
+| `threat_rt` | monsters seen, median reaction times | per monster: first visible frame, whether the view was already turning toward it, turn-toward, first shot, hit, kill (and whether by the player) |
 | `aiming` | discharges, accuracy, median angular error | per discharge: weapon, pellets, hits, target, error |
 | `risk` | damage taken by source, hazard-floor crossings, engagements at low health | engagements |
 | `demo` | format, size, mode/params/seed, engine and WAD hashes | the Doom 1.91 (`-longtics`) demo, base64 |

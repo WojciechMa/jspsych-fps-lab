@@ -99,6 +99,7 @@ describe('threat_rt', () => {
     expect(raw.distance).toEqual([141.4]);
     // |offset| reaches 45 − 5 = 40° once the view has turned 5°: at 6° in tic 13.
     expect(raw).toMatchObject({ visible_tic: [10], turn_tic: [13], shot_tic: [15], hit_tic: [15], kill_tic: [15] });
+    expect(raw).toMatchObject({ turning_toward_at_visible: [false], killed_by_player: [true] });
     expect(raw).toMatchObject({ rt_turn_tics: [3], rt_shot_tics: [5], rt_hit_tics: [5] });
     const visibleMs = 1000 + 10 * TIC_MS - 5;
     expect(raw.rt_turn_ms).toEqual([Number((1000 + 13 * TIC_MS - visibleMs).toFixed(1))]);
@@ -112,6 +113,17 @@ describe('threat_rt', () => {
     runner.onTic(tic(1, { monsters: [{ id: 7, type: 1, x: 200, y: 0, z: 0, angle: 0, health: 20 }] }));
     const { raw } = resultOf(runner, 'threat_rt', 2);
     expect(raw.turn_tic).toEqual([null]);
+  });
+
+  it('flags monsters that appear while the view already turns toward them, and kills by others', () => {
+    const runner = startRunner(['threat_rt']);
+    // Turning left (positive) in the last tic; monster 5 appears on the left, monster 6 on the right.
+    runner.onTic(tic(0, { turn: 2 }));
+    runner.onFrame(frame(1, 1, [{ id: 5, x: 100, y: 100 }, { id: 6, x: 100, y: -100 }]));
+    runner.onEvent(ev({ tic: 2, type: 'kill', target: 6, targetType: 1, source: 77 }));
+    runner.onTic(tic(2));
+    const { raw } = resultOf(runner, 'threat_rt', 3);
+    expect(raw).toMatchObject({ id: [5, 6], turning_toward_at_visible: [true, false], killed_by_player: [null, false] });
   });
 
   it('keeps reaction times in tics but not in ms when a pause fell in between', () => {

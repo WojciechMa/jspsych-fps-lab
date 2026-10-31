@@ -21,21 +21,25 @@ interface Sighting {
   distance: number;
   /** Angle from the view direction to the monster; positive = to the left. */
   offset_deg: number;
+  /** The view turned toward the monster in the last tic before it became visible. */
+  turning_toward_at_visible: boolean;
   turn_tic: number | null;
   shot_tic: number | null;
   hit_tic: number | null;
   kill_tic: number | null;
+  /** null while alive; false when another monster or a hazard killed it. */
+  killed_by_player: boolean | null;
 }
 
 const COLUMNS = [
   'id', 'type', 'frame', 'visible_tic', 'visible_ms', 'pixels', 'light', 'distance', 'offset_deg',
-  'turn_tic', 'shot_tic', 'hit_tic', 'kill_tic', 'rt_turn_tics', 'rt_shot_tics', 'rt_hit_tics',
-  'rt_turn_ms', 'rt_shot_ms', 'rt_hit_ms',
+  'turning_toward_at_visible', 'turn_tic', 'shot_tic', 'hit_tic', 'kill_tic', 'killed_by_player',
+  'rt_turn_tics', 'rt_shot_tics', 'rt_hit_tics', 'rt_turn_ms', 'rt_shot_ms', 'rt_hit_ms',
 ] as const;
 
 export const threatRt: Measure<Params> = {
   id: 'threat_rt',
-  version: '1.0.0',
+  version: '1.1.0',
   label: 'Threat reaction time',
   participantDescription:
     'When monsters first appear on your screen, and how quickly you turn toward them, shoot, and hit them.',
@@ -88,6 +92,7 @@ export const threatRt: Measure<Params> = {
         for (const monster of frame.visible) {
           positions.set(monster.id, monster);
           if (!view || monster.pixels < params.minPixels || sightings.has(monster.id)) continue;
+          const offset = viewOffset(view, monster.x, monster.y);
           sightings.set(monster.id, {
             id: monster.id,
             type: monster.type,
@@ -97,11 +102,13 @@ export const threatRt: Measure<Params> = {
             pixels: monster.pixels,
             light: monster.light,
             distance: round(distance(view, monster), 1),
-            offset_deg: round(viewOffset(view, monster.x, monster.y), 2),
+            offset_deg: round(offset, 2),
+            turning_toward_at_visible: view.turn !== 0 && Math.sign(view.turn) === Math.sign(offset),
             turn_tic: null,
             shot_tic: null,
             hit_tic: null,
             kill_tic: null,
+            killed_by_player: null,
           });
         }
       },
@@ -123,7 +130,10 @@ export const threatRt: Measure<Params> = {
           }
           case 'kill': {
             const s = sighting(event.target);
-            if (s) s.kill_tic ??= event.tic;
+            if (s && s.kill_tic === null) {
+              s.kill_tic = event.tic;
+              s.killed_by_player = byPlayer(event.source);
+            }
             break;
           }
         }
