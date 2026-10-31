@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { GameEvent } from '../engine/types';
 import { getMeasure, participantDescriptions, resolveParams } from './registry';
 import { MeasureRunner } from './runner';
-import { end, frame, PLAYER, startRunner, tic, TIC_MS } from './testing';
+import { end, frame, PLAYER, startRunner, tic, TIC_MS, TRIAL } from './testing';
 
 type Summary = Record<string, unknown>;
 const ev = (event: GameEvent): GameEvent => event;
@@ -253,6 +253,6 @@ describe('demo', () => {
     const { summary, raw } = resultOf(runner, 'demo', 3) as unknown as { summary: Summary; raw: string };
     expect(raw).toBe('AQID');
     expect(summary).toMatchObject({ format: 'doom-1.91-longtics', bytes: 3, tics: 3, paradigm: 'classic', mode: 0, seed: null, map: 1 });
-    expect(summary.engine).toEqual({ wasm_sha256: 'wasm', commit: 'commit', wads: [{ name: 'test.wad', bytes: 3, sha256: 'wad' }] });
+    expect(summary.engine).toEqual(TRIAL.engine);
   });
 });

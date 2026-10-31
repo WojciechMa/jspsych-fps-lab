@@ -132,6 +132,16 @@ trials → questionnaires → "your data" preview + download → upload or withd
   discards the staged copy. Each request stays < 32 MB: large raw streams are uploaded as
   separate per-trial files.
 
+## Versioning
+- Project: package.json `version`, recorded with every trial (`engine.app_version`) and tagged in
+  git (`vX.Y.Z`). 0.0.x while building (0.0.1 = M1, 0.0.2 = M2, …); 0.1.0 = first complete
+  initial version; 1.0.0 = fully working project.
+- Each measure has its own version, recorded per trial: MAJOR = a value's definition changes
+  (never pool across majors), MINOR = fields added or renamed with unchanged values, PATCH = no
+  change to the output.
+- doom-trial plugin (`plugin_version` in the data): bump when its parameters or data layout change.
+- Engine and WADs have no version numbers; the commit and SHA-256 hashes identify them.
+
 ## Budgets & docs
 Engine + web ≤ 3 MB, default WAD ≤ 5 MB (gzipped transfer sizes), loading progress bar. README
 documents licenses of all assets and timing limits (35 Hz tics).

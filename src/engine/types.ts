@@ -102,6 +102,8 @@ export interface TrialListener {
 }
 
 export interface EngineInfo {
+  /** Project version from package.json. */
+  app_version: string;
   wasm_sha256: string;
   commit: string;
   wads: { name: string; bytes: number; sha256: string }[];

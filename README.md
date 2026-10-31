@@ -4,10 +4,11 @@ Behavioral experiments on the Doom engine, run as jsPsych trials in the browser 
 static site on GitHub Pages. The project plan and rules are in [AGENTS.md](AGENTS.md); planned
 paradigms are in [docs/paradigms.md](docs/paradigms.md).
 
-Status: M2. A Doom map runs as a jsPsych trial (`doom-trial` plugin); researcher-selected measures
-turn the play into data, and the start screen lists what they record. The data can be downloaded
-as JSON at the end. Nothing is uploaded yet (DataPipe comes in M3). The public site plays MAP01
-of Freedoom Phase 2: the full IWAD, gzipped (about 11 MB), until the trimmed IWAD of M4 exists.
+Status: M2, version 0.0.2. A Doom map runs as a jsPsych trial (`doom-trial` plugin);
+researcher-selected measures turn the play into data, and the start screen lists what they record.
+The data can be downloaded as JSON at the end. Nothing is uploaded yet (DataPipe comes in M3). The
+public site plays MAP01 of Freedoom Phase 2: the full IWAD, gzipped (about 11 MB), until the
+trimmed IWAD of M4 exists.
 
 ## Build and run
 

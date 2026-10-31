@@ -54,7 +54,7 @@ export const TRIAL: TrialInfo = {
   map: 1,
   skill: 3,
   noMonsters: false,
-  engine: { wasm_sha256: 'wasm', commit: 'commit', wads: [{ name: 'test.wad', bytes: 3, sha256: 'wad' }] },
+  engine: { app_version: '0.0.0', wasm_sha256: 'wasm', commit: 'commit', wads: [{ name: 'test.wad', bytes: 3, sha256: 'wad' }] },
 };
 
 export function end(durationTics: number, fields: Partial<TrialEnd> = {}): TrialEnd {

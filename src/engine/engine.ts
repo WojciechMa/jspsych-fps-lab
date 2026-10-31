@@ -88,6 +88,7 @@ export class DoomEngine {
     });
 
     engine.info = {
+      app_version: __APP_VERSION__,
       wasm_sha256: await sha256(wasm),
       commit: __GIT_COMMIT__,
       wads: [{ name: iwad.name, bytes: iwad.data.length, sha256: await sha256(iwad.data) }],
