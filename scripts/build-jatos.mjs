@@ -1,0 +1,91 @@
+// Packs the production build (dist/) into a JATOS study archive (JZIP) for import into JATOS.
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { crc32, deflateRawSync } from 'node:zlib';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const dist = resolve(root, 'dist');
+const jasFile = resolve(root, 'jatos/demo.jas');
+const { version } = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+const study = JSON.parse(readFileSync(jasFile, 'utf8'));
+// Only what the production build loads plus Freedoom's licence; miniwad never ships.
+const WADS = ['freedoom2.wad.gz', 'freedoom-COPYING.txt', 'freedoom-CREDITS.txt'];
+
+function distFiles() {
+  return readdirSync(dist, { withFileTypes: true, recursive: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => relative(dist, resolve(entry.parentPath, entry.name)).split(sep).join('/'))
+    .filter((path) => !path.startsWith('wads/') || WADS.includes(path.slice('wads/'.length)))
+    .sort();
+}
+
+function addJatosScript(html) {
+  const withScript = html.replace('<head>', '<head>\n    <script src="jatos.js"></script>');
+  if (withScript === html) throw new Error('dist/index.html has no <head> tag.');
+  return withScript;
+}
+
+function zip(entries) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const { name, data } of entries) {
+    const nameBytes = Buffer.from(name, 'utf8');
+    const packed = deflateRawSync(data, { level: 9 });
+    const deflated = packed.length < data.length;
+    const body = deflated ? packed : data;
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6); // UTF-8 names
+    local.writeUInt16LE(deflated ? 8 : 0, 8);
+    local.writeUInt16LE(0, 10);
+    local.writeUInt16LE(0x21, 12); // 1980-01-01: same input, same archive
+    local.writeUInt32LE(crc32(data), 14);
+    local.writeUInt32LE(body.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(nameBytes.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    local.copy(central, 6, 4, 30);
+    central.writeUInt32LE(offset, 42);
+    locals.push(local, nameBytes, body);
+    centrals.push(central, nameBytes);
+    offset += local.length + nameBytes.length + body.length;
+  }
+  const directory = Buffer.concat(centrals);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(directory.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, directory, end]);
+}
+
+const files = distFiles();
+if (!files.includes('index.html')) throw new Error('dist/index.html is missing: run npm run build first.');
+for (const name of WADS) {
+  if (!files.includes(`wads/${name}`)) {
+    throw new Error(`dist/wads/${name} is missing: add Freedoom to public/wads as .github/workflows/pages.yml does, then rebuild.`);
+  }
+}
+
+const entries = [{ name: 'study.jas', data: readFileSync(jasFile) }];
+for (const path of files) {
+  const data = readFileSync(resolve(dist, path));
+  entries.push({
+    name: `${study.data.dirName}/${path}`,
+    data: path === 'index.html' ? Buffer.from(addJatosScript(data.toString('utf8'))) : data,
+  });
+}
+
+const outDir = resolve(root, 'dist-jatos');
+const out = resolve(outDir, `${study.data.dirName}-${version}.jzip`);
+mkdirSync(outDir, { recursive: true });
+const archive = zip(entries);
+writeFileSync(out, archive);
+console.log(`Wrote ${relative(root, out)} (${(archive.length / 1e6).toFixed(1)} MB, ${files.length} files).`);
+console.log('Import it in JATOS: Studies > + > Import study.');

@@ -31,6 +31,21 @@ Debian container). The container tool is picked automatically; set `CONTAINER_EN
 there (git-ignored). Production builds load `wads/freedoom2.wad.gz`, which the Pages workflow
 downloads from the pinned Freedoom release and gzips.
 
+### JATOS (local test server)
+
+```sh
+npm run jatos:local start   # JATOS in a container at http://localhost:9000 (admin / admin)
+npm run build:jatos         # production build packed as dist-jatos/jspsych-fps-lab-demo-<version>.jzip
+npm run jatos:local stop    # keeps the data volume; `reset` deletes it
+```
+
+In JATOS: Studies > + > Import study, pick the `.jzip`, then Study links > General Multiple to get
+a participant link. The archive needs `freedoom2.wad.gz`, `freedoom-COPYING.txt` and
+`freedoom-CREDITS.txt` in `public/wads` (the Pages workflow shows how to fetch them); miniwad is
+not packed. The server listens on 127.0.0.1 only because of the default login. JATOS serves
+`.wasm` as `application/octet-stream`, so the browser logs a warning and compiles the engine
+without streaming; it still runs. Nothing is sent to JATOS yet.
+
 Behind a TLS-intercepting proxy, npm may fail with `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`. Setting
 `NODE_OPTIONS=--use-system-ca` makes Node trust the operating system's certificates.
 

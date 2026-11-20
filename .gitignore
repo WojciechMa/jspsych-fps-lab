@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-jatos/
 engine/build/
 src/engine/build/
 # Freedoom files come from the Pages workflow (or a local copy for testing); never committed.

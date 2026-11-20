@@ -14,7 +14,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "build:engine": "node scripts/build-engine.mjs",
-    "build:miniwad": "node scripts/build-miniwad.mjs"
+    "build:miniwad": "node scripts/build-miniwad.mjs",
+    "build:jatos": "npm run build && node scripts/build-jatos.mjs",
+    "jatos:local": "node scripts/jatos-local.mjs"
   },
   "devDependencies": {
     "typescript": "^7.0.2",

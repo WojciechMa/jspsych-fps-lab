@@ -23,7 +23,8 @@ config picks paradigms, maps and measures; participants see exactly what is reco
 - Builds: pinned emscripten/emsdk image; local builds use Podman, and the scripts must also work
   with Docker. CI: GitHub Actions builds engine + site and deploys to Pages. Pins: emsdk image in
   scripts/build-engine.mjs, Node in .nvmrc, upstream commits in engine/UPSTREAM and
-  scripts/build-miniwad.mjs, Freedoom release in .github/workflows/pages.yml.
+  scripts/build-miniwad.mjs, Freedoom release in .github/workflows/pages.yml, JATOS image in
+  scripts/jatos-local.mjs.
 - Desktop only for now: keyboard + mouse, fullscreen, pointer lock; Chromium-based browsers and
   Firefox. Exclude mobile and Safari via plugin-browser-check (mobile: see Side projects).
 - Controls: WASD move, mouse turn (vertical mouse motion ignored), left click fire, E use, always

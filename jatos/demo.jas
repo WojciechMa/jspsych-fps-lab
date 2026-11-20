@@ -1,0 +1,40 @@
+{
+  "version": "3",
+  "data": {
+    "uuid": "ba461cba-0aa5-4646-a8c9-f9ca9b63a0cd",
+    "title": "jspsych-fps-lab demo",
+    "description": "The GitHub Pages demo served by JATOS: one Doom trial, data as a JSON download. Nothing is sent to JATOS yet.",
+    "groupStudy": false,
+    "linearStudy": false,
+    "allowPreview": false,
+    "dirName": "jspsych-fps-lab-demo",
+    "comments": "Built by npm run build:jatos. Re-importing overwrites these properties.",
+    "jsonData": null,
+    "endRedirectUrl": "",
+    "studyEntryMsg": null,
+    "componentList": [
+      {
+        "uuid": "6ce6ad87-50d0-4158-a6dd-e862e6bba947",
+        "title": "Doom trial",
+        "htmlFilePath": "index.html",
+        "reloadable": true,
+        "active": true,
+        "comments": "",
+        "jsonData": null
+      }
+    ],
+    "batchList": [
+      {
+        "uuid": "ea9feba8-464f-4ea5-ab00-523ca30f93aa",
+        "title": "Default",
+        "active": true,
+        "maxActiveMembers": null,
+        "maxTotalMembers": null,
+        "maxTotalWorkers": null,
+        "allowedWorkerTypes": ["Jatos", "PersonalMultiple", "GeneralMultiple"],
+        "comments": null,
+        "jsonData": null
+      }
+    ]
+  }
+}
