@@ -1,6 +1,6 @@
 {
   "name": "jspsych-fps-lab",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "description": "Behavioral experiments on the Doom engine, run as jsPsych trials in the browser.",
   "license": "GPL-2.0-or-later",
@@ -24,7 +24,13 @@
     "vitest": "^5.0.5"
   },
   "dependencies": {
+    "@jspsych/plugin-browser-check": "^2.1.0",
+    "@jspsych/plugin-fullscreen": "^2.1.0",
     "@jspsych/plugin-html-button-response": "^2.1.0",
+    "@jspsych/plugin-survey-likert": "^2.2.0",
+    "@jspsych/plugin-survey-multi-choice": "^2.2.1",
+    "@jspsych/plugin-survey-multi-select": "^2.1.1",
+    "@jspsych/plugin-survey-text": "^2.1.1",
     "jspsych": "^8.3.0"
   }
 }

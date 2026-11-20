@@ -4,7 +4,8 @@ import { toBase64 } from './util';
 
 export const demo: Measure<Record<string, never>> = {
   id: 'demo',
-  version: '1.0.0',
+  // 1.1.0: hud, automap and automap_toggles added.
+  version: '1.1.0',
   label: 'Replay (demo)',
   participantDescription:
     'A replay of your run: the game commands of every moment (moving, turning, firing), so the researchers can replay it exactly.',
@@ -13,7 +14,13 @@ export const demo: Measure<Record<string, never>> = {
   estBytesPerMin: 14_000,
   paramsSchema: { type: 'object', properties: {}, additionalProperties: false },
   create(ctx) {
+    // Tics at which the automap opened, closed, opened, …: not in the demo, but replay needs them
+    // because the 3D view (and so monster visibility) is off while the map is open.
+    const automapToggles: number[] = [];
     return {
+      onEvent(event) {
+        if (event.type === 'automap') automapToggles.push(event.tic);
+      },
       finish(end) {
         const { trial } = ctx;
         return {
@@ -28,6 +35,9 @@ export const demo: Measure<Record<string, never>> = {
             map: trial.map,
             skill: trial.skill,
             no_monsters: trial.noMonsters,
+            hud: trial.hud,
+            automap: trial.automap,
+            automap_toggles: automapToggles,
             engine: trial.engine,
           },
           raw: toBase64(end.demo),

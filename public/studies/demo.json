@@ -3,5 +3,17 @@
   "title": "Doom trial",
   "consent_html": "<p>This is the public demo of jspsych-fps-lab: one round of the first level of Freedoom. Find the exit; the round ends at the exit, if you die, or after 60 seconds of play.</p>",
   "save": { "target": "download" },
-  "blocks": [{ "trials": [{ "map": 1, "skill": 3, "time_limit": 60 }] }]
+  "blocks": [{ "trials": [{ "map": 1, "skill": 3, "time_limit": 60 }] }],
+  "questionnaires": [
+    {
+      "type": "likert",
+      "questions": [
+        {
+          "name": "difficulty",
+          "prompt": "How hard was it to find your way?",
+          "labels": ["Very easy", "Easy", "Neither", "Hard", "Very hard"]
+        }
+      ]
+    }
+  ]
 }

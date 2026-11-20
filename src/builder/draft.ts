@@ -4,6 +4,8 @@ import { getMeasure, MEASURES, resolveParams, type MeasureSpec } from '../measur
 import {
   allTrials,
   type BlockConfig,
+  type QuestionConfig,
+  type QuestionnaireConfig,
   type SaveTargetId,
   type StudyConfig,
   type TrialConfig,
@@ -21,6 +23,7 @@ export interface Draft {
   content_warning: string;
   consent_html: string;
   instructions_html: string;
+  fullscreen: boolean;
   /** Comma- or space-separated names. */
   url_params: string;
   completion_url: string;
@@ -30,11 +33,20 @@ export interface Draft {
   measures: Record<string, MeasureChoice>;
   /** Trials without `measures`: those come from `Draft.measures`. */
   blocks: BlockConfig[];
+  /** May hold fields of other question types; toConfig keeps only the page type's. */
+  questionnaires: QuestionnaireConfig[];
 }
 
 export type ExportedConfig = StudyConfig & { $schema: string };
 
 export const newTrial = (): TrialConfig => ({ map: 1, skill: 3, time_limit: 300 });
+
+export const newQuestion = (n: number): QuestionConfig => ({
+  name: `q${n}`,
+  prompt: '',
+  labels: ['Strongly disagree', 'Disagree', 'Neither', 'Agree', 'Strongly agree'],
+  options: ['Yes', 'No'],
+});
 
 export function defaultMeasures(): Record<string, MeasureChoice> {
   return Object.fromEntries(MEASURES.map((measure) => [measure.id, { on: true, params: resolveParams(measure) }]));
@@ -47,6 +59,7 @@ export function blankDraft(): Draft {
     content_warning: '',
     consent_html: '',
     instructions_html: '',
+    fullscreen: true,
     url_params: '',
     completion_url: '',
     target: 'download',
@@ -54,6 +67,7 @@ export function blankDraft(): Draft {
     jatos: { study_uuid: '', component_uuid: '', batch_uuid: '' },
     measures: defaultMeasures(),
     blocks: [{ trials: [newTrial()] }],
+    questionnaires: [],
   };
 }
 
@@ -84,6 +98,7 @@ export function measureSpecs(draft: Draft): MeasureSpec[] | undefined {
 /** The config to commit: empty texts and default values left out, fields in schema order. */
 export function toConfig(draft: Draft): ExportedConfig {
   const text = (value: string): string | undefined => value.trim() || undefined;
+  const lines = (values: string[] | undefined): string[] => (values ?? []).map((v) => v.trim()).filter(Boolean);
   const urlParams = draft.url_params.split(/[\s,]+/).filter(Boolean);
   const measures = measureSpecs(draft);
   const config: ExportedConfig = {
@@ -92,6 +107,7 @@ export function toConfig(draft: Draft): ExportedConfig {
     content_warning: text(draft.content_warning),
     consent_html: text(draft.consent_html),
     instructions_html: text(draft.instructions_html),
+    fullscreen: draft.fullscreen ? undefined : false,
     url_params: urlParams.length ? urlParams : undefined,
     completion_url: text(draft.completion_url),
     save:
@@ -101,6 +117,7 @@ export function toConfig(draft: Draft): ExportedConfig {
     jatos: draft.target === 'jatos' ? { ...draft.jatos } : undefined,
     blocks: draft.blocks.map((block) => ({
       name: text(block.name ?? ''),
+      practice: block.practice || undefined,
       instructions_html: text(block.instructions_html ?? ''),
       trials: block.trials.map((trial) => ({
         map: trial.map,
@@ -108,10 +125,34 @@ export function toConfig(draft: Draft): ExportedConfig {
         time_limit: trial.time_limit,
         no_monsters: trial.no_monsters || undefined,
         sound: trial.sound === false ? false : undefined,
+        hud: trial.hud === false ? false : undefined,
+        automap: trial.automap || undefined,
         prompt_html: text(trial.prompt_html ?? ''),
         measures,
       })),
     })),
+    questionnaires: draft.questionnaires.length
+      ? draft.questionnaires.map((page) => {
+          const scale = page.type === 'likert';
+          const options = page.type === 'choice' || page.type === 'multi_select';
+          const typed = page.type === 'text';
+          return {
+            name: text(page.name ?? ''),
+            type: page.type,
+            preamble_html: text(page.preamble_html ?? ''),
+            questions: page.questions.map((q) => ({
+              name: q.name,
+              prompt: q.prompt,
+              required: q.required || undefined,
+              labels: scale ? lines(q.labels) : undefined,
+              options: options ? lines(q.options) : undefined,
+              horizontal: options ? q.horizontal || undefined : undefined,
+              rows: typed && q.rows !== undefined && q.rows !== 1 ? q.rows : undefined,
+              placeholder: typed ? text(q.placeholder ?? '') : undefined,
+            })),
+          };
+        })
+      : undefined,
   };
   // Drops the undefined fields.
   return JSON.parse(JSON.stringify(config)) as ExportedConfig;
@@ -135,6 +176,7 @@ export function fromConfig(config: StudyConfig, id: string): { draft: Draft; not
     content_warning: config.content_warning ?? '',
     consent_html: config.consent_html ?? '',
     instructions_html: config.instructions_html ?? '',
+    fullscreen: config.fullscreen ?? true,
     url_params: (config.url_params ?? []).join(', '),
     completion_url: config.completion_url ?? '',
     target: config.save.target,
@@ -145,6 +187,7 @@ export function fromConfig(config: StudyConfig, id: string): { draft: Draft; not
       ...block,
       trials: block.trials.map(({ measures: _measures, ...trial }) => ({ skill: 3, ...trial })),
     })),
+    questionnaires: structuredClone(config.questionnaires ?? []),
   };
   const note = differ
     ? 'The trials in this file use different measures. The builder uses one set for all trials: the first trial\'s.'

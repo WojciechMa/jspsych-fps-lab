@@ -22,6 +22,9 @@ config picks paradigms, maps and measures; participants see exactly what is reco
 - Data: save target per study. Main: JATOS (lab-hosted, reachable from the internet; pinned
   version in the Pins below) via jatos.js. Alternative: DataPipe (@jspsych/extension-pipe,
   32 MB/request). Local JSON download is always offered, and is the only target on Pages.
+  The current JATOS instance serves the course project and is likely temporary (later: own
+  hosting, another instance, or DataPipe). Keep JATOS specifics inside src/save/, build-jatos and
+  the deploy workflow (instance URL only in secrets), so switching target is a config change.
 - Hosting: GitHub Pages = public demo (download only, Freedoom faces, no uploads). Real studies
   run on JATOS: one research study = one JATOS study with fixed UUIDs from its study config,
   packed as a JZIP. Deploy: manual import of the JZIP, or the manual workflow

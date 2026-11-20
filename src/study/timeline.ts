@@ -1,19 +1,54 @@
-// Builds a study's jsPsych timeline from its config: content warning → consent → instructions →
-// blocks of Doom trials (each followed by a save step) → "your data" → submit, download or withdraw.
+// Builds a study's jsPsych timeline from its config: content warning → consent → browser check →
+// full screen → instructions → blocks of Doom trials (each followed by a save step) →
+// questionnaires → "your data" → submit, download or withdraw.
+import BrowserCheckPlugin from '@jspsych/plugin-browser-check';
+import FullscreenPlugin from '@jspsych/plugin-fullscreen';
 import HtmlButtonResponsePlugin from '@jspsych/plugin-html-button-response';
+import SurveyLikertPlugin from '@jspsych/plugin-survey-likert';
+import SurveyMultiChoicePlugin from '@jspsych/plugin-survey-multi-choice';
+import SurveyMultiSelectPlugin from '@jspsych/plugin-survey-multi-select';
+import SurveyTextPlugin from '@jspsych/plugin-survey-text';
 import type { JsPsych } from 'jspsych';
 import DoomTrialPlugin from '../plugins/plugin-doom-trial';
 import SaveStepPlugin from '../plugins/plugin-save-step';
 import type { SaveTarget } from '../save/targets';
-import { DEFAULT_INSTRUCTIONS_HTML, type StudyConfig, trialMeasures } from './config';
+import {
+  DEFAULT_INSTRUCTIONS_HTML,
+  meetsDeviceRequirements,
+  type QuestionnaireConfig,
+  type StudyConfig,
+  trialMeasures,
+} from './config';
 import { consentHtml, escapeHtml, warningHtml } from './pages';
 
 // jsPsych doesn't export its TimelineArray type.
 type Timeline = Extract<Parameters<JsPsych['run']>[0], unknown[]>;
 
 export interface Session {
-  /** Set when the participant declines the warning or consent, or withdraws. */
-  ended: 'declined' | 'withdrawn' | null;
+  /** Set when the participant declines the warning or consent, is excluded by the browser check, or withdraws. */
+  ended: 'declined' | 'excluded' | 'withdrawn' | null;
+}
+
+function questionnaireTrial(page: QuestionnaireConfig) {
+  const common = { preamble: page.preamble_html ?? '', data: { screen: 'questionnaire', questionnaire: page.name ?? null } };
+  const base = page.questions.map((q) => ({ name: q.name, prompt: q.prompt, required: q.required ?? false }));
+  switch (page.type) {
+    case 'likert':
+      return { ...common, type: SurveyLikertPlugin, questions: base.map((q, i) => ({ ...q, labels: page.questions[i].labels })) };
+    case 'choice':
+    case 'multi_select':
+      return {
+        ...common,
+        type: page.type === 'choice' ? SurveyMultiChoicePlugin : SurveyMultiSelectPlugin,
+        questions: base.map((q, i) => ({ ...q, options: page.questions[i].options, horizontal: page.questions[i].horizontal ?? false })),
+      };
+    case 'text':
+      return {
+        ...common,
+        type: SurveyTextPlugin,
+        questions: base.map((q, i) => ({ ...q, rows: page.questions[i].rows ?? 1, placeholder: page.questions[i].placeholder ?? '' })),
+      };
+  }
 }
 
 export function buildTimeline(
@@ -56,6 +91,28 @@ export function buildTimeline(
   };
   const lastResponse = (): number => jsPsych.data.get().last(1).values()[0]?.response as number;
 
+  let excluded = false;
+  const browserCheck = {
+    type: BrowserCheckPlugin,
+    features: ['width', 'height', 'browser', 'browser_version', 'mobile', 'os', 'fullscreen', 'webaudio', 'vsync_rate'],
+    // Always continues: exclusion runs through decline() so the save target can withdraw.
+    inclusion_function: (features: Record<string, unknown>) => {
+      excluded = !meetsDeviceRequirements(features, config);
+      return true;
+    },
+    data: { screen: 'browser_check' },
+  };
+  const fullscreen = config.fullscreen ?? true;
+  const enterFullscreen = {
+    type: FullscreenPlugin,
+    fullscreen_mode: true,
+    message: '<p>The game is played in full screen. Leaving full screen pauses it.</p>',
+    button_label: 'Switch to full screen',
+    delay_after: 300,
+    data: { screen: 'fullscreen' },
+  };
+  const exitFullscreen = { type: FullscreenPlugin, fullscreen_mode: false, delay_after: 0, record_data: false };
+
   const blocks = config.blocks.map((block, b) => ({
     timeline: [
       ...(block.instructions_html
@@ -69,14 +126,18 @@ export function buildTimeline(
           time_limit: trial.time_limit,
           no_monsters: trial.no_monsters ?? false,
           sound: trial.sound ?? true,
+          hud: trial.hud ?? true,
+          automap: trial.automap ?? false,
+          fullscreen,
           measures: trialMeasures(trial),
           ...(trial.prompt_html ? { prompt: trial.prompt_html } : {}),
-          data: { block: b, block_name: block.name ?? null },
+          data: { block: b, block_name: block.name ?? null, practice: block.practice ?? false },
         },
         saveStep,
       ]),
     ],
   }));
+  const questionnaires = (config.questionnaires ?? []).map(questionnaireTrial);
 
   const summary = (): string => {
     const trials = jsPsych.data.get().filter({ trial_type: 'doom-trial' }).values();
@@ -90,7 +151,7 @@ export function buildTimeline(
     return `
       <h1>Your data</h1>
       <p>These are the game rounds that were recorded, with the size of each round's data. The
-      download contains everything listed on the consent page.</p>
+      download contains everything listed on the consent page${config.questionnaires?.length ? ', including your answers to the questions' : ''}.</p>
       <table class="your-data"><tr><th>Round</th><th>Level</th><th>Ended by</th><th>Play time</th><th>Data</th></tr>${rows}</table>`;
   };
   const uploads = target.id !== 'download';
@@ -111,10 +172,15 @@ export function buildTimeline(
     { timeline: [decline('declined', 'declined the content warning')], conditional_function: () => lastResponse() === 1 },
     { timeline: [consent], conditional_function: active },
     { timeline: [decline('declined', 'did not consent')], conditional_function: () => active() && lastResponse() === 1 },
+    { timeline: [browserCheck], conditional_function: active },
+    { timeline: [decline('excluded', 'excluded by the browser check')], conditional_function: () => active() && excluded },
     {
       timeline: [
+        ...(fullscreen ? [enterFullscreen] : []),
         { type: HtmlButtonResponsePlugin, stimulus: config.instructions_html ?? DEFAULT_INSTRUCTIONS_HTML, choices: ['Continue'], data: { screen: 'instructions' } },
         ...blocks,
+        ...questionnaires,
+        ...(fullscreen ? [exitFullscreen] : []),
         yourData,
         {
           timeline: [decline('withdrawn', 'withdrew at the end')],

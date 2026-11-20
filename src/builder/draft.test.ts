@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StudyConfig } from '../study/config';
-import { blankDraft, fromConfig, measureSpecs, toConfig } from './draft';
+import { blankDraft, fromConfig, measureSpecs, newQuestion, toConfig } from './draft';
 
 const studyFiles = import.meta.glob('../../public/studies/*.json', { eager: true, import: 'default' });
 
@@ -35,6 +35,34 @@ describe('builder draft', () => {
     const { draft, note } = fromConfig(config, 'x');
     expect(note).toMatch(/different measures/);
     expect(measureSpecs(draft)).toEqual(['trajectory']);
+  });
+
+  it('round-trips practice blocks, full screen and questionnaires', () => {
+    const config: StudyConfig = {
+      title: 'x',
+      fullscreen: false,
+      save: { target: 'download' },
+      blocks: [
+        { name: 'warm-up', practice: true, trials: [{ map: 2, skill: 3, time_limit: 30 }] },
+        { trials: [{ map: 1, skill: 3, time_limit: 60, hud: false, automap: true }] },
+      ],
+      questionnaires: [
+        { name: 'p1', type: 'choice', preamble_html: '<p>Hi</p>', questions: [{ name: 'a', prompt: 'A?', required: true, options: ['x', 'y'], horizontal: true }] },
+        { type: 'text', questions: [{ name: 'b', prompt: 'B?', rows: 3, placeholder: 'type' }] },
+      ],
+    };
+    expect(toConfig(fromConfig(config, 'x').draft)).toEqual({ $schema: './schema.json', ...config });
+  });
+
+  it('keeps only the fields of the page type', () => {
+    const draft = blankDraft();
+    draft.questionnaires = [{ type: 'likert', questions: [newQuestion(1)] }];
+    expect(toConfig(draft).questionnaires).toEqual([
+      { type: 'likert', questions: [{ name: 'q1', prompt: '', labels: newQuestion(1).labels }] },
+    ]);
+    draft.questionnaires[0].type = 'multi_select';
+    draft.questionnaires[0].questions[0].options = ['a', ' ', 'b '];
+    expect(toConfig(draft).questionnaires?.[0].questions[0]).toEqual({ name: 'q1', prompt: '', options: ['a', 'b'] });
   });
 
   it('writes the JATOS UUIDs only for the jatos target', () => {

@@ -10,13 +10,15 @@ import {
   estimateBytes,
   fetchJson,
   LIMITS,
+  type QuestionnaireConfig,
+  type QuestionType,
   STUDY_ID,
   type SaveTargetId,
   type StudyConfig,
 } from '../study/config';
 import { consentHtml, escapeHtml, warningHtml } from '../study/pages';
 import { checkSchema, type Schema } from '../study/schema-check';
-import { blankDraft, defaultMeasures, type Draft, fromConfig, newTrial, toConfig } from './draft';
+import { blankDraft, defaultMeasures, type Draft, fromConfig, newQuestion, newTrial, toConfig } from './draft';
 import './builder.css';
 
 const STORAGE_KEY = 'jspsych-fps-lab-builder-draft';
@@ -178,6 +180,7 @@ function studySection(): HTMLElement {
     field('Content warning', textArea(draft.content_warning, (v) => (draft.content_warning = v), { placeholder: DEFAULT_CONTENT_WARNING, rows: 4 }), 'Plain text of the first screen. Empty: the default text shown in grey.'),
     field('Consent text (HTML)', textArea(draft.consent_html, (v) => (draft.consent_html = v), { rows: 5 }), 'Your study information. The list of recorded data and where it goes is added below it.'),
     field('Instructions (HTML)', textArea(draft.instructions_html, (v) => (draft.instructions_html = v), { placeholder: DEFAULT_INSTRUCTIONS_HTML.trim(), rows: 4 }), 'Shown after consent. Empty: the game controls (shown in grey).'),
+    el('label', {}, checkbox(draft.fullscreen, (v) => (draft.fullscreen = v)), ' Full screen (recommended): asked before the instructions; leaving it pauses the game'),
     field('URL parameters to store', textInput(draft.url_params, (v) => (draft.url_params = v), { placeholder: 'e.g. participant, session' }), 'Names of query parameters (e.g. a participant code from the recruitment platform) stored with the data.'),
     field('Completion URL', textInput(draft.completion_url, (v) => (draft.completion_url = v), { placeholder: 'https://…' }), 'Optional: where participants go after finishing, e.g. back to the recruitment platform.'),
     el('p', { className: 'help', textContent: 'Game data: Freedoom Phase 2. Status-bar face: Freedoom\'s. Paradigm: classic Doom. More choices come with M4.' }),
@@ -263,6 +266,8 @@ function blocksSection(): HTMLElement {
         el('td', {}, numberInput(trial.time_limit, (v) => (trial.time_limit = v), { min: '1', max: '900', step: '1' })),
         el('td', {}, checkbox(trial.no_monsters ?? false, (v) => (trial.no_monsters = v))),
         el('td', {}, checkbox(trial.sound ?? true, (v) => (trial.sound = v))),
+        el('td', {}, checkbox(trial.hud ?? true, (v) => (trial.hud = v))),
+        el('td', {}, checkbox(trial.automap ?? false, (v) => (trial.automap = v))),
         el('td', {}, textInput(trial.prompt_html ?? '', (v) => (trial.prompt_html = v), { placeholder: 'Click to start.' })),
         el(
           'td',
@@ -272,13 +277,14 @@ function blocksSection(): HTMLElement {
         ),
       ),
     );
-    const header = ['#', 'Map', 'Skill', 'Time limit (s)', 'No monsters', 'Sound', 'Prompt (HTML)', ''];
+    const header = ['#', 'Map', 'Skill', 'Time limit (s)', 'No monsters', 'Sound', 'Status bar', 'Automap (Tab)', 'Prompt (HTML)', ''];
     section.append(
       el(
         'div',
         { className: 'block' },
         el('h3', { textContent: `Block ${b + 1}` }),
         field('Name (optional, stored with the data)', textInput(block.name ?? '', (v) => (block.name = v))),
+        el('label', {}, checkbox(block.practice ?? false, (v) => (block.practice = v)), ' Practice block (its trials are marked practice in the data)'),
         field('Instructions before the block (HTML, optional)', textArea(block.instructions_html ?? '', (v) => (block.instructions_html = v), { rows: 2 })),
         el('table', { className: 'trials' }, el('tr', {}, ...header.map((h) => el('th', { textContent: h }))), ...rows),
         el(
@@ -297,9 +303,90 @@ function blocksSection(): HTMLElement {
   return section;
 }
 
+const QUESTION_TYPES: [QuestionType, string][] = [
+  ['likert', 'Rating scale (Likert)'],
+  ['choice', 'Pick one option'],
+  ['multi_select', 'Pick any options'],
+  ['text', 'Typed answer'],
+];
+
+function questionnairesSection(): HTMLElement {
+  const section = el(
+    'fieldset',
+    {},
+    el('legend', { textContent: 'Questionnaires' }),
+    el('p', { className: 'help', textContent: 'Pages of questions after the last block. Each page has one question type. Answer names must be unique in the study; they become the keys of the answers in the data.' }),
+  );
+  const lines = (values: string[] | undefined) => (values ?? []).join('\n');
+  const split = (text: string) => text.split('\n');
+  draft.questionnaires.forEach((page, p) => {
+    const questions = page.questions.map((q, i) => {
+      const specific: HTMLElement[] =
+        page.type === 'likert'
+          ? [field('Scale labels, lowest first (one per line; stored as 0, 1, …)', textArea(lines(q.labels), (v) => (q.labels = split(v)), { rows: 5 }))]
+          : page.type === 'text'
+            ? [
+                field('Answer box height (lines)', numberInput(q.rows ?? 1, (v) => (q.rows = v), { min: '1', max: '20', step: '1' })),
+                field('Placeholder', textInput(q.placeholder ?? '', (v) => (q.placeholder = v))),
+              ]
+            : [
+                field('Options (one per line)', textArea(lines(q.options), (v) => (q.options = split(v)), { rows: 4 })),
+                el('label', {}, checkbox(q.horizontal ?? false, (v) => (q.horizontal = v)), ' Options in one row'),
+              ];
+      return el(
+        'div',
+        { className: 'question' },
+        field(`Question ${i + 1} (HTML)`, textArea(q.prompt, (v) => (q.prompt = v), { rows: 2 })),
+        el(
+          'div',
+          { className: 'row' },
+          field('Answer name', textInput(q.name, (v) => (q.name = v.trim()), { pattern: '[A-Za-z0-9_]{1,64}', size: 16 })),
+          el('label', {}, checkbox(q.required ?? false, (v) => (q.required = v)), ' Required'),
+          button('Remove question', () => page.questions.splice(i, 1), page.questions.length === 1),
+        ),
+        ...specific,
+      );
+    });
+    section.append(
+      el(
+        'div',
+        { className: 'block' },
+        el('h3', { textContent: `Page ${p + 1}` }),
+        el(
+          'div',
+          { className: 'row' },
+          field('Type', select(QUESTION_TYPES, page.type, (v) => {
+            page.type = v as QuestionType;
+            const defaults = newQuestion(0);
+            for (const q of page.questions) {
+              q.labels ??= defaults.labels;
+              q.options ??= defaults.options;
+            }
+          }, true)),
+          field('Name (optional, stored with the answers)', textInput(page.name ?? '', (v) => (page.name = v.trim()), { pattern: '[A-Za-z0-9_]{1,64}', size: 16 })),
+        ),
+        field('Text above the questions (HTML, optional)', textArea(page.preamble_html ?? '', (v) => (page.preamble_html = v), { rows: 2 })),
+        ...questions,
+        el(
+          'div',
+          { className: 'row' },
+          button('Add question', () => page.questions.push(newQuestion(questionCount() + 1))),
+          button('Remove page', () => draft.questionnaires.splice(p, 1)),
+        ),
+      ),
+    );
+  });
+  section.append(button('Add questionnaire page', () => draft.questionnaires.push({ type: 'likert', questions: [newQuestion(questionCount() + 1)] })));
+  return section;
+}
+
+function questionCount(): number {
+  return draft.questionnaires.reduce((sum, page) => sum + page.questions.length, 0);
+}
+
 function renderForm(): void {
   noteEl.textContent = loadNote ?? '';
-  formEl.replaceChildren(studySection(), saveSection(), measuresSection(), blocksSection());
+  formEl.replaceChildren(studySection(), saveSection(), measuresSection(), blocksSection(), questionnairesSection());
 }
 
 // --- Checks, preview and export ---
@@ -338,7 +425,22 @@ const PREVIEW_STYLE = `
   section { padding: 1em 0 1.5em; border-bottom: 2px dashed #444; }
   .recorded { display: inline-block; max-width: 48em; margin: 0; text-align: left; }
   .buttons span { display: inline-block; margin: 0.2em; padding: 0.4em 0.9em; border: 1px solid #555; border-radius: 4px; background: #222; }
-  .label { color: #888; font-size: 12px; text-transform: uppercase; }`;
+  .label { color: #888; font-size: 12px; text-transform: uppercase; }
+  .question { max-width: 48em; margin: 1em auto; text-align: left; }
+  .answer { color: #aaa; }`;
+
+function questionnairePreview(page: QuestionnaireConfig): string {
+  const questions = page.questions.map((q) => {
+    const answer =
+      page.type === 'likert'
+        ? (q.labels ?? []).map((label) => `○ ${escapeHtml(label)}`).join(' &nbsp; ')
+        : page.type === 'text'
+          ? `[${escapeHtml(q.placeholder || 'typed answer')}]`
+          : (q.options ?? []).map((option) => `${page.type === 'choice' ? '○' : '☐'} ${escapeHtml(option)}`).join(q.horizontal ? ' &nbsp; ' : '<br>');
+    return `<div class="question"><div>${q.prompt}${q.required ? ' *' : ''}</div><div class="answer">${answer}</div></div>`;
+  });
+  return `${page.preamble_html ?? ''}${questions.join('')}`;
+}
 
 function renderPages(config: StudyConfig): void {
   const page = (label: string, html: string, buttons: string[]) =>
@@ -347,15 +449,20 @@ function renderPages(config: StudyConfig): void {
   const blocks = config.blocks.flatMap((block, b) => [
     ...(block.instructions_html ? [page(`Before block ${b + 1}`, block.instructions_html, ['Continue'])] : []),
     ...block.trials.map((trial, t) =>
-      page(`Block ${b + 1}, trial ${t + 1}: MAP${String(trial.map).padStart(2, '0')}, up to ${trial.time_limit} s`, `<p>${trial.prompt_html ?? 'Click to start.'}</p>`, []),
+      page(`${block.practice ? 'Practice b' : 'B'}lock ${b + 1}, trial ${t + 1}: MAP${String(trial.map).padStart(2, '0')}, up to ${trial.time_limit} s`, `<p>${trial.prompt_html ?? 'Click to start.'}</p>`, []),
     ),
   ]);
+  const questionnaires = (config.questionnaires ?? []).map((q, p) => page(`Questionnaire page ${p + 1}`, questionnairePreview(q), ['Continue']));
+  const fullscreen = config.fullscreen ?? true;
   const uploads = config.save.target !== 'download';
   pagesEl.srcdoc = `<!doctype html><meta charset="utf-8"><style>${PREVIEW_STYLE}</style>${[
     page('Content warning', warningHtml(config), ['Continue', "I'd rather not take part"]),
     page('Consent', consentHtml(config, consentText), ['I agree', 'I do not agree']),
+    page('Browser check', '<p>Automatic. Phones, tablets and browsers other than Chrome, Edge, Firefox or Opera end the study here, with nothing recorded.</p>', []),
+    ...(fullscreen ? [page('Full screen', '<p>The game is played in full screen. Leaving full screen pauses it.</p>', ['Switch to full screen'])] : []),
     page('Instructions', config.instructions_html ?? DEFAULT_INSTRUCTIONS_HTML, ['Continue']),
     ...blocks,
+    ...questionnaires,
     page('End', '<h1>Your data</h1><p>A table of the recorded rounds and their data size.</p>', uploads ? ['Submit my data', 'Download a copy', 'Withdraw and delete my data'] : ['Finish', 'Download my data']),
   ].join('')}`;
 }

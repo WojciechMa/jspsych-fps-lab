@@ -9,8 +9,10 @@
 #include "d_main.h"
 #include "doomstat.h"
 #include "g_game.h"
+#include "m_menu.h"
 #include "p_local.h"
 #include "r_defs.h"
+#include "r_main.h"
 #include "r_state.h"
 #include "z_zone.h"
 
@@ -29,7 +31,7 @@
 enum { REC_TIC = 1, REC_EVENT, REC_FRAME, REC_VISIBLE, REC_END, REC_START };
 enum {
     EV_DAMAGE = 1, EV_KILL, EV_PICKUP, EV_SHOT, EV_HIT, EV_USE, EV_CROSS, EV_SOUND,
-    EV_ROI_ENTER, EV_ROI_EXIT, EV_DEATH, EV_EXIT
+    EV_ROI_ENTER, EV_ROI_EXIT, EV_DEATH, EV_EXIT, EV_AUTOMAP
 };
 enum { END_EXIT = 1, END_SECRET_EXIT, END_DEATH, END_TIMEOUT, END_ABORTED };
 enum { TRIAL_IDLE, TRIAL_RUNNING, TRIAL_ENDED };
@@ -39,6 +41,8 @@ extern byte *demobuffer;
 extern byte *demo_p;
 extern char *demoname;
 extern boolean secretexit;
+// m_menu.c
+extern int showMessages;
 
 static int32_t stream[STREAM_WORDS];
 static int stream_used;
@@ -52,6 +56,7 @@ static int next_mobj_id;
 static int frame_number;
 static int last_roi_tag;
 static int last_sector;
+static int last_automap;
 static int demo_length;
 
 int dg_sprite_pixels;
@@ -307,6 +312,14 @@ void DG_OnTicEnd(void)
         pending_end = secretexit ? END_SECRET_EXIT : END_EXIT;
     }
 
+    // The automap only changes what is drawn, but a replay needs it to know when the 3D view
+    // (and so monster visibility) was off.
+    if (automapactive != last_automap)
+    {
+        last_automap = automapactive;
+        Event(EV_AUTOMAP, automapactive, 0, 0, 0, 0);
+    }
+
     RecordTic();
     trial_tic++;
 
@@ -356,7 +369,8 @@ void DG_OnSpriteDrawn(vissprite_t *vis, int pixels)
     }
 }
 
-// Starts `map` (MAPxx) from scratch: skill 0-4, flags 1 = no monsters, 2 = fast, 4 = respawn.
+// Starts `map` (MAPxx) from scratch: skill 0-4, flags 1 = no monsters, 2 = fast, 4 = respawn,
+// 8 = no HUD (full-height view without status bar, no messages).
 // tics = time limit in game tics, 0 for none.
 EMSCRIPTEN_KEEPALIVE void dg_start_trial(int map, int skill, int flags, int tics)
 {
@@ -372,10 +386,15 @@ EMSCRIPTEN_KEEPALIVE void dg_start_trial(int map, int skill, int flags, int tics
     frame_number = 0;
     last_roi_tag = 0;
     last_sector = -1;
+    last_automap = 0;
 
     nomonsters = (flags & 1) != 0;
     fastparm = (flags & 2) != 0;
     respawnparm = (flags & 4) != 0;
+    // Drawing only: the view size takes effect at the next frame; game state is unaffected.
+    screenblocks = (flags & 8) ? 11 : 10;
+    R_SetViewSize(screenblocks, detailLevel);
+    showMessages = (flags & 8) == 0;
 
     // Same order as -record: allocate, load the level, then write the header.
     G_RecordDemo("trial");

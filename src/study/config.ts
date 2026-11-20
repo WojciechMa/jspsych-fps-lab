@@ -12,14 +12,37 @@ export interface TrialConfig {
   time_limit: number;
   no_monsters?: boolean;
   sound?: boolean;
+  hud?: boolean;
+  automap?: boolean;
   prompt_html?: string;
   measures?: MeasureSpec[];
 }
 
 export interface BlockConfig {
   name?: string;
+  practice?: boolean;
   instructions_html?: string;
   trials: TrialConfig[];
+}
+
+export type QuestionType = 'likert' | 'choice' | 'multi_select' | 'text';
+
+export interface QuestionConfig {
+  name: string;
+  prompt: string;
+  required?: boolean;
+  labels?: string[];
+  options?: string[];
+  horizontal?: boolean;
+  rows?: number;
+  placeholder?: string;
+}
+
+export interface QuestionnaireConfig {
+  name?: string;
+  type: QuestionType;
+  preamble_html?: string;
+  questions: QuestionConfig[];
 }
 
 export interface StudyConfig {
@@ -27,6 +50,8 @@ export interface StudyConfig {
   content_warning?: string;
   consent_html?: string;
   instructions_html?: string;
+  devices?: 'desktop'[];
+  fullscreen?: boolean;
   iwad?: 'freedoom2.wad';
   face?: 'freedoom';
   url_params?: string[];
@@ -34,6 +59,7 @@ export interface StudyConfig {
   save: { target: SaveTargetId; datapipe_experiment_id?: string };
   jatos?: { study_uuid: string; component_uuid: string; batch_uuid: string };
   blocks: BlockConfig[];
+  questionnaires?: QuestionnaireConfig[];
 }
 
 export const STUDY_ID = /^[a-z0-9-]+$/;
@@ -65,6 +91,48 @@ export function allTrials(config: StudyConfig): TrialConfig[] {
   return config.blocks.flatMap((block) => block.trials);
 }
 
+/** detect-browser names (via plugin-browser-check) of the supported browsers: Chromium-based or Firefox. */
+export const DESKTOP_BROWSERS = ['chrome', 'edge-chromium', 'opera', 'yandexbrowser', 'firefox'];
+
+/** Whether the browser-check results meet the study's device requirements (only "desktop" so far). */
+export function meetsDeviceRequirements(features: Record<string, unknown>, config: StudyConfig): boolean {
+  return (
+    features.mobile === false &&
+    features.os !== 'Android OS' &&
+    features.os !== 'iOS' &&
+    DESKTOP_BROWSERS.includes(String(features.browser)) &&
+    features.webaudio === true &&
+    (config.fullscreen === false || features.fullscreen === true)
+  );
+}
+
+// Question fields that only some questionnaire types use.
+const QUESTION_FIELDS: Record<QuestionType, { needs?: 'labels' | 'options'; allowed: (keyof QuestionConfig)[] }> = {
+  likert: { needs: 'labels', allowed: ['labels'] },
+  choice: { needs: 'options', allowed: ['options', 'horizontal'] },
+  multi_select: { needs: 'options', allowed: ['options', 'horizontal'] },
+  text: { allowed: ['rows', 'placeholder'] },
+};
+const TYPE_SPECIFIC: (keyof QuestionConfig)[] = ['labels', 'options', 'horizontal', 'rows', 'placeholder'];
+
+function checkQuestionnaires(config: StudyConfig): string[] {
+  const problems: string[] = [];
+  const names = new Set<string>();
+  (config.questionnaires ?? []).forEach((page, p) => {
+    const rule = QUESTION_FIELDS[page.type];
+    page.questions.forEach((question, q) => {
+      const path = `config.questionnaires[${p}].questions[${q}]`;
+      if (rule.needs && !question[rule.needs]) problems.push(`${path}.${rule.needs} is needed for ${page.type} questions`);
+      for (const field of TYPE_SPECIFIC) {
+        if (field in question && !rule.allowed.includes(field)) problems.push(`${path}.${field} is not used by ${page.type} questions`);
+      }
+      if (names.has(question.name)) problems.push(`${path}.name "${question.name}" is used twice`);
+      names.add(question.name);
+    });
+  });
+  return problems;
+}
+
 /** Estimated output in bytes: per trial and measure, and in total. */
 export function estimateBytes(config: StudyConfig): { perTrialMeasure: number[][]; total: number } {
   const perTrialMeasure = allTrials(config).map((trial) =>
@@ -82,6 +150,7 @@ export function checkStudy(config: unknown, schema: Schema): string[] {
   const problems = checkSchema(config, schema);
   if (problems.length) return problems;
   const study = config as StudyConfig;
+  problems.push(...checkQuestionnaires(study));
   allTrials(study).forEach((trial, i) => {
     try {
       new MeasureRunner(trialMeasures(trial));

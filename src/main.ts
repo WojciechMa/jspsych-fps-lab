@@ -89,9 +89,12 @@ async function main(): Promise<void> {
       const text =
         session.ended === 'declined'
           ? 'You chose not to take part. Nothing was recorded. You can close this page.'
-          : session.ended === 'withdrawn'
-            ? 'Your data was deleted. Thank you for your time. You can close this page.'
-            : 'Finished. Thank you! You can close this page.';
+          : session.ended === 'excluded'
+            ? 'Sorry, this study needs Chrome, Edge, Firefox or Opera on a desktop or laptop computer ' +
+              'with a keyboard and mouse. Nothing was recorded. You can close this page.'
+            : session.ended === 'withdrawn'
+              ? 'Your data was deleted. Thank you for your time. You can close this page.'
+              : 'Finished. Thank you! You can close this page.';
       const p = document.createElement('p');
       p.textContent = text;
       jsPsych.getDisplayElement().replaceChildren(p);

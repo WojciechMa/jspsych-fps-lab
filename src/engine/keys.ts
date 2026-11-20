@@ -19,3 +19,6 @@ export const KEY_BINDINGS: Readonly<Record<string, number>> = {
   Digit6: 0x36,
   Digit7: 0x37,
 };
+
+/** Opens and closes the automap, in trials that allow it. */
+export const AUTOMAP_KEY = { code: 'Tab', key: 0x09 } as const;

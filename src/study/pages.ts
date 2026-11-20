@@ -16,10 +16,16 @@ export function consentHtml(config: StudyConfig, consentText: string): string {
     trialMeasures(trial).map((spec) => (typeof spec === 'string' ? spec : spec.id)),
   );
   const recorded = participantDescriptions(ids).map((line) => `<li>${line}</li>`).join('');
+  const questions = config.questionnaires?.length
+    ? '<p>After playing, you answer a few questions. Your answers are saved with the game data.</p>'
+    : '';
   return `
       <h1>${escapeHtml(config.title)}</h1>
       ${config.consent_html ?? ''}
+      <p>Before the game starts, the page checks and records your browser and operating system
+      (names and versions), the size of the browser window and the screen's refresh rate.</p>
       <p>While you play, the game records:</p>
       <ul class="recorded">${recorded}</ul>
+      ${questions}
       <p>No name or other personal details are recorded. ${escapeHtml(consentText)}</p>`;
 }

@@ -3,7 +3,7 @@
 import createDoomEngine, { type DoomEngineModule } from 'doom-engine-build/doom-engine.mjs';
 import wasmUrl from 'doom-engine-build/doom-engine.wasm?url';
 import { EngineAudio } from './audio';
-import { KEY_BINDINGS } from './keys';
+import { AUTOMAP_KEY, KEY_BINDINGS } from './keys';
 import { StreamDecoder } from './stream';
 import type { EndReason, EngineInfo, PauseCause, TrialEnd, TrialListener } from './types';
 
@@ -20,6 +20,10 @@ export interface TrialOptions {
   timeLimit: number | null;
   noMonsters: boolean;
   sound: boolean;
+  /** Status bar and pickup messages; false gives a full-height view. */
+  hud: boolean;
+  /** Tab opens the automap. */
+  automap: boolean;
 }
 
 interface ActiveTrial {
@@ -54,6 +58,7 @@ export class DoomEngine {
   private readonly heldKeys = new Set<number>();
   private buttons = 0;
   private mouseRemainder = 0;
+  private automapKey = false;
   private recentErrors: string[] = [];
 
   private constructor() {
@@ -145,7 +150,9 @@ export class DoomEngine {
       this.trial = trial;
     });
     const ticLimit = options.timeLimit ? Math.round(options.timeLimit * TICS_PER_SECOND) : 0;
-    this.module._dg_start_trial(options.map, options.skill - 1, options.noMonsters ? 1 : 0, ticLimit);
+    const flags = (options.noMonsters ? 1 : 0) | (options.hud ? 0 : 8);
+    this.automapKey = options.automap;
+    this.module._dg_start_trial(options.map, options.skill - 1, flags, ticLimit);
     this.frameTimes.clear();
     this.run();
   }
@@ -274,7 +281,7 @@ export class DoomEngine {
   }
 
   private readonly onKey = (event: KeyboardEvent): void => {
-    const key = KEY_BINDINGS[event.code];
+    const key = event.code === AUTOMAP_KEY.code && this.automapKey ? AUTOMAP_KEY.key : KEY_BINDINGS[event.code];
     if (key === undefined) return;
     event.preventDefault();
     const pressed = event.type === 'keydown';
@@ -310,6 +317,10 @@ export class DoomEngine {
 
   private readonly onBlur = (): void => this.pause('window_blur');
 
+  private readonly onFullscreenChange = (): void => {
+    if (!document.fullscreenElement) this.pause('fullscreen_exit');
+  };
+
   private attachInput(): void {
     window.addEventListener('keydown', this.onKey, true);
     window.addEventListener('keyup', this.onKey, true);
@@ -319,6 +330,7 @@ export class DoomEngine {
     window.addEventListener('blur', this.onBlur);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
+    document.addEventListener('fullscreenchange', this.onFullscreenChange);
   }
 
   private detachInput(): void {
@@ -330,6 +342,7 @@ export class DoomEngine {
     window.removeEventListener('blur', this.onBlur);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
+    document.removeEventListener('fullscreenchange', this.onFullscreenChange);
   }
 
   /** Lets go of everything held, so no key stays pressed while the engine is stopped. */

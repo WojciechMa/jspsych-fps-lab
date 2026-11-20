@@ -29,6 +29,8 @@ export interface TrialInfo {
   map: number;
   skill: number;
   noMonsters: boolean;
+  hud: boolean;
+  automap: boolean;
   engine: EngineInfo;
 }
 

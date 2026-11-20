@@ -160,6 +160,8 @@ function decodeEvent(w: Int32Array, p: number): GameEvent {
       return { tic, type: 'death', killer: thingId(a) };
     case 12:
       return { tic, type: 'exit', secret: a !== 0 };
+    case 13:
+      return { tic, type: 'automap', open: a !== 0 };
     default:
       return { tic, type: 'unknown', kind };
   }

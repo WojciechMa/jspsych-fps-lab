@@ -1,6 +1,6 @@
 // input_log: raw key and mouse events during the trial, on the performance.now() clock
 // (event.timeStamp), from passive capture listeners.
-import { KEY_BINDINGS } from '../engine/keys';
+import { AUTOMAP_KEY, KEY_BINDINGS } from '../engine/keys';
 import type { Measure } from './types';
 import { round } from './util';
 
@@ -13,7 +13,8 @@ const GAME_KEYS = new Set([...Object.keys(KEY_BINDINGS), 'Escape']);
 
 export const inputLog: Measure<Params> = {
   id: 'input_log',
-  version: '1.0.0',
+  // 1.1.0: 'game' keys include Tab in trials with the automap.
+  version: '1.1.0',
   label: 'Input log',
   participantDescription:
     'Which keys and mouse buttons you press while playing and how you move the mouse, with their times.',
@@ -27,7 +28,7 @@ export const inputLog: Measure<Params> = {
         enum: ['game', 'all'],
         default: 'game',
         description:
-          "'game' logs only the game's control keys and Esc; 'all' logs every key. Keys are stored as KeyboardEvent.code (the physical key), never as typed text. Auto-repeats are left out.",
+          "'game' logs only the game's control keys and Esc (and Tab when the trial has the automap); 'all' logs every key. Keys are stored as KeyboardEvent.code (the physical key), never as typed text. Auto-repeats are left out.",
       },
       mouseMoves: {
         type: 'boolean',
@@ -43,11 +44,12 @@ export const inputLog: Measure<Params> = {
     const moves = { t: [] as number[], dx: [] as number[], dy: [] as number[] };
 
     const target = ctx.inputTarget;
+    const gameKeys = ctx.trial.automap ? new Set([...GAME_KEYS, AUTOMAP_KEY.code]) : GAME_KEYS;
     if (target) {
       const options: AddEventListenerOptions = { capture: true, passive: true, signal: ctx.signal };
       const onKey = (event: Event): void => {
         const e = event as KeyboardEvent;
-        if (e.repeat || (params.keys === 'game' && !GAME_KEYS.has(e.code))) return;
+        if (e.repeat || (params.keys === 'game' && !gameKeys.has(e.code))) return;
         keys.t.push(round(e.timeStamp, 1));
         keys.code.push(e.code);
         keys.down.push(e.type === 'keydown' ? 1 : 0);

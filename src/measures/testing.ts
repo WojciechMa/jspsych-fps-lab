@@ -54,6 +54,8 @@ export const TRIAL: TrialInfo = {
   map: 1,
   skill: 3,
   noMonsters: false,
+  hud: true,
+  automap: false,
   engine: { app_version: '0.0.0', wasm_sha256: 'wasm', commit: 'commit', wads: [{ name: 'test.wad', bytes: 3, sha256: 'wad' }] },
 };
 

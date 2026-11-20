@@ -17,7 +17,8 @@ interface Pause {
 
 export const sessionQuality: Measure<Params> = {
   id: 'session_quality',
-  version: '1.1.0',
+  // 2.0.0: fullscreen exits are their own pause cause (were counted under pointer_lock_lost).
+  version: '2.0.0',
   label: 'Session quality',
   participantDescription:
     'How smoothly the game ran on your computer, and when and why it paused (for example when you switched to another window).',

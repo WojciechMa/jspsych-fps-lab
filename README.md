@@ -40,16 +40,27 @@ the page with a list of all of them. The page loads `?study=<id>` (default `demo
 the study named in the component's JSON input. [demo.json](public/studies/demo.json) is the Pages
 demo (download only); [jatos-demo.json](public/studies/jatos-demo.json) saves to JATOS.
 
-Participants see: content warning → consent (the recorded data and where it goes) → how to play →
-the trials, each followed by a save step → a summary of their data with submit, download or
-withdraw → end page. Declining at the warning or the consent records nothing. URL parameters
-listed in `url_params` are stored as data (only those names, at most 200 characters each).
+Participants see: content warning → consent (the recorded data and where it goes) → browser
+check → full screen → how to play → the trials, each followed by a save step → questionnaires →
+a summary of their data with submit, download or withdraw → end page. Declining at the warning or
+the consent records nothing; so does failing the browser check (Chrome, Edge, Opera or Firefox on
+a desktop or laptop with Web Audio and the fullscreen API; no phones, tablets or Safari). URL
+parameters listed in `url_params` are stored as data (only those names, at most 200 characters
+each).
+
+Optional fields besides the trials: `fullscreen: false` skips the full-screen step (by default
+leaving full screen pauses the game and a click goes back to it); `practice: true` marks a block's
+trials as practice in the data; per trial, `hud: false` hides the status bar and pickup messages
+(full-height view) and `automap: true` lets Tab open the automap; `questionnaires` are pages of
+questions after the last block, one type per page (`likert`, `choice`, `multi_select`, `text`),
+stored by answer name.
 
 The study builder (`/builder.html`: http://localhost:5173/builder.html with `npm run dev`, or
 under the Pages URL) writes these files without editing JSON by hand: pick the trials (map,
-skill, time limit), the measures and their parameters, and where the data goes. It shows the
+skill, time limit), the measures and their parameters, questionnaires, and where the data goes. It shows the
 problems the page would report, the estimated data size against the JATOS limits, and the
-participant-facing pages (warning, consent with the recorded measures, instructions, trials).
+participant-facing pages (warning, consent with the recorded measures, instructions, trials,
+questionnaires).
 Download the JSON, save it as `public/studies/<id>.json` and commit it. Nothing is sent anywhere;
 the draft stays in the browser's local storage. It can also open an existing config to edit it.
 The builder is not packed into JATOS study archives.
@@ -103,16 +114,17 @@ Behind a TLS-intercepting proxy, npm may fail with `UNABLE_TO_GET_ISSUER_CERT_LO
 ## Controls
 
 WASD moves, the mouse turns, left click fires, E uses, 1–7 select weapons. The player always
-runs. Esc releases the mouse and pauses the game, as does switching to another window; game time
-stops while paused.
+runs. Esc releases the mouse and pauses the game, as does switching to another window or leaving
+full screen; game time stops while paused. Tab opens the automap only in trials with
+`automap: true`.
 
 ## Recorded data
 
 Only the active measures' outputs are stored. A `doom-trial` takes `measures`: measure ids or
 `{ id, params }` objects (default: all of them). Its data row holds:
 
-- the trial: `paradigm`, `mode`, `seed`, `input_profile`, `map`, `skill`, `time_limit`,
-  `no_monsters`, `sound`;
+- the trial: `block`, `block_name`, `practice`, `paradigm`, `mode`, `seed`, `input_profile`,
+  `map`, `skill`, `time_limit`, `no_monsters`, `sound`, `hud`, `automap`, `fullscreen`;
 - the outcome: `end_reason` (`exit`, `secret_exit`, `death`, `timeout`, `aborted` or `error`),
   `duration_tics`, `player_id`, `unadjusted_movement`, `stream_dropped` (should be 0);
 - `measures`: id, version and parameters of each active measure;
@@ -121,14 +133,18 @@ Only the active measures' outputs are stored. A `doom-trial` takes `measures`: m
 
 | Measure | Summary | Raw |
 |---|---|---|
-| `session_quality` | frame times, dropped frames, pauses by cause | pauses (frame intervals optional) |
-| `input_log` | event counts | game keys, mouse buttons and mouse moves with `event.timeStamp` |
+| `session_quality` | frame times, dropped frames, pauses by cause (lost mouse, window blur, hidden page, full-screen exit) | pauses (frame intervals optional) |
+| `input_log` | event counts | game keys (plus Tab with the automap), mouse buttons and mouse moves with `event.timeStamp` |
 | `trajectory` | path length, speed, turning, coverage, revisits, teleports | x, y, angle per tic |
 | `roi` | visits and time per ROI tag (sectors tagged 900–999) | enter/exit tics |
 | `threat_rt` | monsters seen, median reaction times | per monster: first visible frame, whether the view was already turning toward it, turn-toward, first shot, hit, kill (and whether by the player) |
 | `aiming` | discharges, accuracy, median angular error | per discharge: weapon, pellets, hits, target, error |
 | `risk` | damage taken by source, hazard-floor crossings, engagements at low health | engagements |
-| `demo` | format, size, mode/params/seed, engine and WAD hashes | the Doom 1.91 (`-longtics`) demo, base64 |
+| `demo` | format, size, mode/params/seed, HUD/automap settings and the tics the automap opened or closed (replay needs them: the 3D view is off while it is open), engine and WAD hashes | the Doom 1.91 (`-longtics`) demo, base64 |
+
+Other rows: `browser_check` (browser, version, OS, window size, screen refresh rate) and one
+`questionnaire` row per page (`response`: answers by name; Likert answers are 0-based scale
+indexes).
 
 Every threshold is a measure parameter with a documented default; see `paramsSchema` in
 `src/measures/*.ts`. Tables are stored as columns. Positions are in map units, angles in degrees

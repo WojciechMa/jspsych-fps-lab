@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { splitRecord } from '../save/records';
-import { checkStudy, estimateBytes, type StudyConfig } from './config';
+import { checkStudy, estimateBytes, meetsDeviceRequirements, type StudyConfig } from './config';
 import { checkSchema, type Schema } from './schema-check';
 
 const studyFiles = import.meta.glob('../../public/studies/*.json', { eager: true, import: 'default' });
@@ -74,6 +74,41 @@ describe('study configs', () => {
     const { total } = estimateBytes(config);
     const problems = checkStudy(config, schema);
     expect(total > 50e6).toBe(problems.some((p) => p.includes('per run')));
+  });
+
+  it('checks questionnaire fields per question type and unique answer names', () => {
+    const config: StudyConfig = {
+      ...minimal(),
+      questionnaires: [
+        { type: 'likert', questions: [{ name: 'a', prompt: 'A?' }] },
+        { type: 'choice', questions: [{ name: 'a', prompt: 'B?', options: ['x', 'y'], labels: ['l', 'm'] }] },
+        { type: 'text', questions: [{ name: 'c', prompt: 'C?', rows: 3, placeholder: '' }] },
+      ],
+    };
+    expect(checkStudy(config, schema)).toEqual([
+      'config.questionnaires[0].questions[0].labels is needed for likert questions',
+      'config.questionnaires[1].questions[0].labels is not used by choice questions',
+      'config.questionnaires[1].questions[0].name "a" is used twice',
+    ]);
+  });
+});
+
+describe('meetsDeviceRequirements', () => {
+  const desktop = { mobile: false, os: 'Windows 10', browser: 'chrome', webaudio: true, fullscreen: true };
+
+  it('accepts Chromium-based browsers and Firefox on desktops', () => {
+    for (const browser of ['chrome', 'edge-chromium', 'firefox', 'opera']) {
+      expect(meetsDeviceRequirements({ ...desktop, browser }, minimal())).toBe(true);
+    }
+  });
+
+  it('rejects Safari, phones, tablets and missing full screen', () => {
+    expect(meetsDeviceRequirements({ ...desktop, browser: 'safari', os: 'Mac OS' }, minimal())).toBe(false);
+    expect(meetsDeviceRequirements({ ...desktop, mobile: true }, minimal())).toBe(false);
+    expect(meetsDeviceRequirements({ ...desktop, os: 'Android OS' }, minimal())).toBe(false);
+    expect(meetsDeviceRequirements({ ...desktop, browser: 'crios', os: 'iOS' }, minimal())).toBe(false);
+    expect(meetsDeviceRequirements({ ...desktop, fullscreen: false }, minimal())).toBe(false);
+    expect(meetsDeviceRequirements({ ...desktop, fullscreen: false }, { ...minimal(), fullscreen: false })).toBe(true);
   });
 });
 

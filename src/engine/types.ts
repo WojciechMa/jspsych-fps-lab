@@ -82,10 +82,12 @@ export type GameEvent = { tic: number } & (
   | { type: 'roi_exit'; tag: number; sector: number }
   | { type: 'death'; killer: Id }
   | { type: 'exit'; secret: boolean }
+  /** The automap opened or closed; while it is open the 3D view (and monster visibility) is off. */
+  | { type: 'automap'; open: boolean }
   | { type: 'unknown'; kind: number }
 );
 
-export type PauseCause = 'pointer_lock_lost' | 'window_blur' | 'page_hidden';
+export type PauseCause = 'pointer_lock_lost' | 'window_blur' | 'page_hidden' | 'fullscreen_exit';
 
 export type PageEvent =
   | { type: 'pause'; cause: PauseCause; /** First tic that had not run yet. */ tic: number; timeMs: number }

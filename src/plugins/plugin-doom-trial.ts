@@ -16,7 +16,7 @@ export function useDoomEngine(instance: DoomEngine): void {
 
 const info = <const>{
   name: 'doom-trial',
-  version: '0.2.0',
+  version: '0.3.0',
   parameters: {
     /** MAPxx number to play. */
     map: { type: ParameterType.INT, default: 1 },
@@ -26,6 +26,12 @@ const info = <const>{
     time_limit: { type: ParameterType.FLOAT, default: null },
     no_monsters: { type: ParameterType.BOOL, default: false },
     sound: { type: ParameterType.BOOL, default: true },
+    /** Status bar and pickup messages; false gives a full-height view. */
+    hud: { type: ParameterType.BOOL, default: true },
+    /** Tab opens the automap. */
+    automap: { type: ParameterType.BOOL, default: false },
+    /** Play in full screen: a click outside full screen first switches back to it. */
+    fullscreen: { type: ParameterType.BOOL, default: false },
     /** Measure ids, or { id, params } objects; null = DEFAULT_MEASURES. */
     measures: { type: ParameterType.COMPLEX, default: null },
     /** Shown over the game until the participant clicks to start. */
@@ -41,6 +47,9 @@ const info = <const>{
     time_limit: { type: ParameterType.FLOAT },
     no_monsters: { type: ParameterType.BOOL },
     sound: { type: ParameterType.BOOL },
+    hud: { type: ParameterType.BOOL },
+    automap: { type: ParameterType.BOOL },
+    fullscreen: { type: ParameterType.BOOL },
     /** exit, secret_exit, death, timeout, aborted or error. */
     end_reason: { type: ParameterType.STRING },
     error: { type: ParameterType.STRING },
@@ -78,6 +87,9 @@ class DoomTrialPlugin implements JsPsychPlugin<Info> {
       time_limit: trial.time_limit ?? null,
       no_monsters: trial.no_monsters ?? false,
       sound: trial.sound ?? true,
+      hud: trial.hud ?? true,
+      automap: trial.automap ?? false,
+      fullscreen: trial.fullscreen ?? false,
     };
     const runner = new MeasureRunner((trial.measures as MeasureSpec[] | null) ?? DEFAULT_MEASURES);
 
@@ -98,7 +110,18 @@ class DoomTrialPlugin implements JsPsychPlugin<Info> {
 
     const outcome = await new Promise<TrialEnd | Error>((resolve) => {
       let started = false;
+      // If the browser refuses full screen, the next click plays in the window.
+      let fullscreenRefused = false;
       overlay.onclick = () => {
+        if (settings.fullscreen && !document.fullscreenElement && !fullscreenRefused) {
+          // Entering full screen uses up the click, so capturing the mouse needs another one.
+          document.documentElement.requestFullscreen().then(
+            () => show(started ? '<p>Click to continue.</p>' : (trial.prompt ?? '')),
+            () => (fullscreenRefused = true),
+          );
+          return;
+        }
+        fullscreenRefused = false;
         overlay.hidden = true;
         if (started) {
           doom.resume().catch(captureFailed);
@@ -113,6 +136,8 @@ class DoomTrialPlugin implements JsPsychPlugin<Info> {
               timeLimit: settings.time_limit,
               noMonsters: settings.no_monsters,
               sound: settings.sound,
+              hud: settings.hud,
+              automap: settings.automap,
             },
             runner,
           )
@@ -127,6 +152,8 @@ class DoomTrialPlugin implements JsPsychPlugin<Info> {
                   map: settings.map,
                   skill: settings.skill,
                   noMonsters: settings.no_monsters,
+                  hud: settings.hud,
+                  automap: settings.automap,
                   engine: doom.info,
                 },
                 window,
