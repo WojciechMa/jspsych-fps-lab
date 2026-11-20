@@ -43,6 +43,24 @@ body {
   text-align: left;
 }
 
+.your-data {
+  margin: 0 auto 1em;
+  border-collapse: collapse;
+}
+
+.your-data th,
+.your-data td {
+  padding: 0.2em 0.8em;
+  border-bottom: 1px solid #444;
+}
+
+/* Start errors list every config problem, one per line. */
+.error {
+  max-width: 60em;
+  white-space: pre-wrap;
+  text-align: left;
+}
+
 .loader,
 .doom-stage {
   position: fixed;

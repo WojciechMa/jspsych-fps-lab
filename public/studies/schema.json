@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schema.json",
+  "title": "jspsych-fps-lab study config",
+  "description": "One research study. Load with ?study=<file name without .json>, or in JATOS through the component input {\"study\": \"<id>\"} that npm run build:jatos sets.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "save", "blocks"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "content_warning": {
+      "description": "Plain text of the first screen. Default: the content warning in AGENTS.md.",
+      "type": "string",
+      "minLength": 1
+    },
+    "consent_html": {
+      "description": "The researchers' consent text (HTML). The list of recorded data and where it goes is added below it.",
+      "type": "string"
+    },
+    "instructions_html": {
+      "description": "Shown after consent, before the first block. Default: the game controls.",
+      "type": "string"
+    },
+    "iwad": {
+      "description": "The game data loaded at start. Development builds play miniwad unless ?iwad= is given.",
+      "enum": ["freedoom2.wad"]
+    },
+    "face": {
+      "description": "Status-bar face: \"freedoom\" (the IWAD's own) or a face id (M4).",
+      "enum": ["freedoom"]
+    },
+    "url_params": {
+      "description": "Names of URL query parameters to store with the data (never shown on the page).",
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "pattern": "^[A-Za-z0-9_]{1,64}$" }
+    },
+    "completion_url": {
+      "description": "Where participants go after finishing, e.g. back to a recruitment platform.",
+      "type": "string",
+      "pattern": "^https://[^\\s\"'<>]+$"
+    },
+    "save": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target"],
+      "properties": {
+        "target": {
+          "description": "download: a JSON file in the browser only; jatos: the lab's JATOS server; datapipe: DataPipe (prepared, not implemented yet).",
+          "enum": ["download", "jatos", "datapipe"]
+        },
+        "datapipe_experiment_id": { "type": "string", "pattern": "^[A-Za-z0-9]{6,64}$" }
+      }
+    },
+    "jatos": {
+      "description": "Fixed UUIDs of the JATOS study, component and batch; re-importing the study updates it in place.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["study_uuid", "component_uuid", "batch_uuid"],
+      "properties": {
+        "study_uuid": { "$ref": "#/$defs/uuid" },
+        "component_uuid": { "$ref": "#/$defs/uuid" },
+        "batch_uuid": { "$ref": "#/$defs/uuid" }
+      }
+    },
+    "blocks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["trials"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "instructions_html": { "type": "string" },
+          "trials": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/trial" } }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "trial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["map", "time_limit"],
+      "properties": {
+        "map": { "description": "MAPxx number.", "type": "integer", "minimum": 1, "maximum": 32 },
+        "skill": { "description": "1-5 as in Doom's menu; default 3.", "type": "integer", "minimum": 1, "maximum": 5 },
+        "time_limit": {
+          "description": "Seconds of game time (pauses don't count); at most 15 minutes.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 900
+        },
+        "no_monsters": { "type": "boolean" },
+        "sound": { "type": "boolean" },
+        "prompt_html": { "description": "Shown over the game until the participant clicks to start.", "type": "string" },
+        "measures": {
+          "description": "Measure ids, or {id, params}. Default: all measures.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "anyOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id"],
+                "properties": { "id": { "type": "string" }, "params": { "type": "object" } }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

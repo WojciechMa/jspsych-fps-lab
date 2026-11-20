@@ -1,4 +1,4 @@
-# jspsych-fps-lab: jsPsych + Doom-engine behavioral experiments (static site on GitHub Pages)
+# jspsych-fps-lab: jsPsych + Doom-engine behavioral experiments (static site: demo on GitHub Pages, studies on JATOS)
 
 
 ## Goal
@@ -19,11 +19,22 @@ config picks paradigms, maps and measures; participants see exactly what is reco
   only; new flats/sprites go into the IWAD. No music.
 - Web: TypeScript + Vite + jsPsych 8.x, static build output. Node LTS installed locally
   (fallback: run Node in Podman).
-- Data: @jspsych/extension-pipe (DataPipe, 32 MB/request) + local JSON/CSV download fallback.
+- Data: save target per study. Main: JATOS (lab-hosted, reachable from the internet; pinned
+  version in the Pins below) via jatos.js. Alternative: DataPipe (@jspsych/extension-pipe,
+  32 MB/request). Local JSON download is always offered, and is the only target on Pages.
+- Hosting: GitHub Pages = public demo (download only, Freedoom faces, no uploads). Real studies
+  run on JATOS: one research study = one JATOS study with fixed UUIDs from its study config,
+  packed as a JZIP. Deploy: manual import of the JZIP, or the manual workflow
+  (.github/workflows/jatos.yml, workflow_dispatch: pick study + target) that builds it and
+  imports it via the JATOS API, inside a GitHub environment that needs approval.
+- Secrets (JATOS URL, API token of a dedicated JATOS user, DataPipe ids if needed) live in GitHub
+  environment secrets, never in the repo, client code or the Vite build. The browser only talks to
+  JATOS through jatos.js, which needs no token.
 - Builds: pinned emscripten/emsdk image; local builds use Podman, and the scripts must also work
-  with Docker. CI: GitHub Actions builds engine + site and deploys to Pages. Pins: emsdk image in
+  with Docker. CI: GitHub Actions builds engine + site and deploys to Pages; a manual workflow
+  deploys a study to JATOS. Pins: emsdk image in
   scripts/build-engine.mjs, Node in .nvmrc, upstream commits in engine/UPSTREAM and
-  scripts/build-miniwad.mjs, Freedoom release in .github/workflows/pages.yml, JATOS image in
+  scripts/build-miniwad.mjs, Freedoom release in .github/actions/add-freedoom/action.yml, JATOS image in
   scripts/jatos-local.mjs.
 - Desktop only for now: keyboard + mouse, fullscreen, pointer lock; Chromium-based browsers and
   Firefox. Exclude mobile and Safari via plugin-browser-check (mobile: see Side projects).
@@ -106,12 +117,19 @@ for review. Each trial records paradigm, mode, seed, input profile, and the acti
 versions and params.
 
 ## Study configs
-- public/studies/<id>.json, loaded via ?study=<id> (id must match ^[a-z0-9-]+$), validated
-  against a JSON schema; fail loudly.
-- Fields: title, consent HTML, allowed devices (default desktop), WAD set, practice, blocks of
-  trials (paradigm, map, skill, params, seed, time limit, end conditions, measures + params,
-  HUD/automap/sound flags), questionnaires, save settings, URL params to store, completion URL,
-  optional counterbalancing via DataPipe condition assignment.
+- public/studies/<id>.json, loaded via ?study=<id> (id must match ^[a-z0-9-]+$) or, in JATOS,
+  from the component's JSON input; validated against public/studies/schema.json; fail loudly.
+- Fields: title, content warning (default text below), consent HTML, allowed devices (default
+  desktop), WAD set, face ("freedoom" = the IWAD's own; see M4), practice, blocks of trials
+  (paradigm, map, skill, params, seed, time limit, end conditions, measures + params,
+  HUD/automap/sound flags), questionnaires, save target (download | jatos | datapipe) + its
+  settings, JATOS UUIDs (study, component, batch), URL params to store, completion URL, optional
+  counterbalancing (JATOS batch session or DataPipe condition assignment).
+- Default content warning: "This study uses a first-person video game with monsters, cartoon
+  violence, sudden sounds and flashing lights. If you have photosensitive epilepsy or tend to feel
+  sick when playing video games, please do not take part. You can pause with Esc and stop at any
+  time by closing this page, without giving a reason." Declining ends the session and records
+  nothing. Never ask health questions (special-category data) without asking the user first.
 - The WAD set is fixed per study and loaded at engine boot; trials only pick maps, and the
   validator rejects duplicate map names. Trials ≤ 15 min; time limits count game tics, so pauses
   don't count.
@@ -121,17 +139,24 @@ versions and params.
 - URL params (e.g., participant ids) are stored as data only, never injected into HTML.
 
 ## Participant flow
-consent (auto-lists active measures) → browser check → fullscreen → instructions → practice →
-trials → questionnaires → "your data" preview + download → upload or withdraw → debrief.
+content warning → consent (auto-lists active measures and says where the data goes) → browser
+check → fullscreen → instructions → practice → trials → questionnaires → "your data" preview +
+download → upload or withdraw → debrief.
 - Blur, fullscreen exit or pointer-lock loss pauses the trial; a click resumes it.
-- extension-pipe streams (stream: true): each finished trial is staged on DataPipe. A completed
-  session submits the full dataset at the end; that is the real data, and DataPipe then discards
-  the staged copy. Sessions that stop early come back as .partial.json files: debugging only,
-  never analyzed. The consent text says data is recorded during the session and incomplete
-  sessions are kept for debugging.
-- Withdrawing at the preview submits only a "withdrawn" marker instead of the data, which also
-  discards the staged copy. Each request stays < 32 MB: large raw streams are uploaded as
-  separate per-trial files.
+- Uploads happen only between trials, never during play.
+- JATOS: after each trial, its compact record goes to jatos.appendResultData and its raw streams
+  and demo to jatos.uploadResultFile (one file each). Completing the session calls endStudy
+  (FINISHED); that is the real data. Runs that stop early keep their partial data: debugging only,
+  never analyzed. Withdrawing at the preview calls abortStudy, which deletes the run's data and
+  files (ABORTED). JATOS defaults: result data ≤ 5 MB per component run, files ≤ 30 MB each and
+  ≤ 50 MB per study run; the validator checks the estimate against them.
+- DataPipe: extension-pipe streams (stream: true): each finished trial is staged. A completed
+  session submits the full dataset at the end; DataPipe then discards the staged copy. Early
+  stops come back as .partial.json files (debugging only). Withdrawing submits only a
+  "withdrawn" marker, which also discards the staged copy. Each request stays < 32 MB: large raw
+  streams go as separate per-trial files.
+- The consent text names the save target, says data is recorded during the session and that
+  incomplete sessions are kept for debugging (download-only: nothing leaves the browser).
 
 ## Versioning
 - Project: package.json `version`, recorded with every trial (`engine.app_version`) and tagged in
@@ -152,11 +177,16 @@ M0 vendored doomgeneric with our platform layer + miniwad runs locally (Podman b
    Pages via Actions.
 M1 hooks + jsPsych plugin; trial ends on exit/death/timeout; JSON download.
 M2 measure registry + MVP measures + auto consent list; Vitest tests on synthetic streams.
-M3 study configs, schema, builder page, DataPipe.
+M3 study configs, schema, builder page, save layer (download, JATOS; DataPipe as alternative),
+   per-study JZIP + manual JATOS deploy workflow.
 M4 paradigm registry + engine modes; first paradigms with custom maps: maze navigation,
    threat-RT corridor, two-door bandit; trimmed Freedoom IWAD; researcher-supplied status-bar
-   faces (photos → the 42 STF* patches by script, selectable per study/trial; never participant
-   photos).
+   faces: photos → the 42 STF* patches (5 pain levels × 3 straight, 2 turn, ouch, evil grin,
+   kill; + god, dead) as a face PWAD by script. Chosen per study by the config's `face` field
+   ("freedoom" or a face id), since ST_Init loads the patches once at boot. A face of a real
+   person needs their written consent; photos and built face PWADs stay out of the public repo
+   (git-ignored faces/; how the JATOS workflow gets them is decided in M4) and never go on Pages.
+   Never participant photos.
 M5 offline replay (Node CLI, also used by CI): demo + WADs + mode/params/seed → recomputed
    engine-derived measures; must match live data (input_log and session_quality excluded).
 

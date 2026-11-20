@@ -1,0 +1,13 @@
+{
+  "$schema": "./schema.json",
+  "title": "Doom trial (JATOS demo)",
+  "consent_html": "<p>A test of saving to JATOS: one round of the first level of Freedoom. Find the exit; the round ends at the exit, if you die, or after 60 seconds of play.</p>",
+  "url_params": ["participant"],
+  "save": { "target": "jatos" },
+  "jatos": {
+    "study_uuid": "ba461cba-0aa5-4646-a8c9-f9ca9b63a0cd",
+    "component_uuid": "6ce6ad87-50d0-4158-a6dd-e862e6bba947",
+    "batch_uuid": "ea9feba8-464f-4ea5-ab00-523ca30f93aa"
+  },
+  "blocks": [{ "trials": [{ "map": 1, "skill": 3, "time_limit": 60 }] }]
+}

@@ -1,0 +1,80 @@
+name: Deploy study to JATOS
+
+# Manual only: Actions > Deploy study to JATOS > Run workflow, then pick the study and the target.
+# Builds the study's JZIP and imports it through the JATOS API. The import overwrites the study
+# with the same UUID (properties and assets) and keeps its results. Each target is a GitHub
+# environment holding the secrets JATOS_URL (e.g. https://jatos.example.org) and JATOS_TOKEN (API
+# token of a dedicated JATOS user who is a member of the study); give it required reviewers.
+
+on:
+  workflow_dispatch:
+    inputs:
+      study:
+        description: Study id (public/studies/<id>.json with save.target "jatos")
+        required: true
+        type: string
+      target:
+        description: GitHub environment of the JATOS server
+        required: true
+        type: environment
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jatos-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      jzip: ${{ steps.pack.outputs.jzip }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:engine
+        env:
+          CONTAINER_ENGINE: docker
+      - uses: ./.github/actions/add-freedoom
+      - id: pack
+        env:
+          STUDY: ${{ inputs.study }}
+        run: |
+          [[ "$STUDY" =~ ^[a-z0-9-]+$ ]] || { echo "Invalid study id: $STUDY"; exit 1; }
+          npm run build:jatos -- "$STUDY"
+          files=(dist-jatos/*.jzip)
+          [[ ${#files[@]} -eq 1 ]] || { echo "Expected one .jzip, found ${#files[@]}"; exit 1; }
+          echo "jzip=$(basename "${files[0]}")" >> "$GITHUB_OUTPUT"
+      # Also kept for a manual import (Studies > + > Import study).
+      - uses: actions/upload-artifact@v7
+        with:
+          name: jzip
+          path: dist-jatos/*.jzip
+          if-no-files-found: error
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.target }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: jzip
+      - name: Import into JATOS
+        env:
+          JATOS_URL: ${{ secrets.JATOS_URL }}
+          JATOS_TOKEN: ${{ secrets.JATOS_TOKEN }}
+          JZIP: ${{ needs.build.outputs.jzip }}
+        run: |
+          [[ -n "$JATOS_TOKEN" ]] || { echo "Secret JATOS_TOKEN is missing in this environment"; exit 1; }
+          [[ "$JATOS_URL" =~ ^https://[^/[:space:]]+(/[^[:space:]]*)?$ ]] || { echo "Secret JATOS_URL must be an https:// URL"; exit 1; }
+          curl --fail-with-body -sS -o response.json -X POST "${JATOS_URL%/}/jatos/api/v1/studies" \
+            -H "Authorization: Bearer $JATOS_TOKEN" \
+            -F "study=@$JZIP" || { cat response.json 2>/dev/null; exit 1; }
+          jq -r '.data | "Imported study \(.id) \"\(.title)\" (\(.uuid)) into \(.dirName)"' response.json

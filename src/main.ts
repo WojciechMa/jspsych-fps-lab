@@ -1,20 +1,13 @@
-// Demo timeline: content warning, then one Doom trial with the default measures, ending with a JSON
-// download of the data.
+// Boots one study: jatos.js (inside JATOS), the study config, the IWAD and the engine, then runs
+// the study's timeline.
 import 'jspsych/css/jspsych.css';
 import './style.css';
-import HtmlButtonResponsePlugin from '@jspsych/plugin-html-button-response';
 import { initJsPsych } from 'jspsych';
 import { DoomEngine } from './engine/engine';
-import { DEFAULT_MEASURES, participantDescriptions } from './measures/registry';
-import DoomTrialPlugin, { useDoomEngine } from './plugins/plugin-doom-trial';
-
-// The Pages workflow adds Freedoom, gzipped. Dev builds play miniwad, or ?iwad=<name>.wad from
-// public/wads.
-const requestedIwad = new URLSearchParams(location.search).get('iwad');
-const devIwad = requestedIwad && /^[a-z0-9-]+\.wad$/.test(requestedIwad) ? requestedIwad : 'miniwad.wad';
-const WAD = import.meta.env.DEV
-  ? { name: devIwad, url: `${import.meta.env.BASE_URL}wads/${devIwad}` }
-  : { name: 'freedoom2.wad', url: `${import.meta.env.BASE_URL}wads/freedoom2.wad.gz` };
+import { useDoomEngine } from './plugins/plugin-doom-trial';
+import { createSaveTarget, waitForJatos } from './save/targets';
+import { fetchJson, loadStudy } from './study/config';
+import { buildTimeline } from './study/timeline';
 
 const loader = element<HTMLDivElement>('#loader');
 const message = element<HTMLParagraphElement>('#message');
@@ -60,72 +53,60 @@ function dataFileName(): string {
 }
 
 async function main(): Promise<void> {
-  const wad = await fetchWithProgress(WAD.url, (fraction) => {
+  const jatos = await waitForJatos();
+  const query = new URLSearchParams(location.search);
+  const input = jatos?.componentInput as { study?: unknown } | undefined;
+  const studyId = jatos ? input?.study : (query.get('study') ?? 'demo');
+  if (typeof studyId !== 'string') throw new Error('The JATOS component input needs {"study": "<id>"}.');
+  const config = await loadStudy(studyId, fetchJson);
+  const target = createSaveTarget(config, jatos);
+  document.title = config.title;
+
+  // Dev builds play miniwad, or ?iwad=<name>.wad from public/wads; production loads the study's
+  // IWAD gzipped.
+  const iwad = config.iwad ?? 'freedoom2.wad';
+  const requestedIwad = query.get('iwad');
+  const devIwad = requestedIwad && /^[a-z0-9-]+\.wad$/.test(requestedIwad) ? requestedIwad : 'miniwad.wad';
+  const wad = import.meta.env.DEV
+    ? { name: devIwad, url: `${import.meta.env.BASE_URL}wads/${devIwad}` }
+    : { name: iwad, url: `${import.meta.env.BASE_URL}wads/${iwad}.gz` };
+  const data = await fetchWithProgress(wad.url, (fraction) => {
     progress.value = fraction;
   });
   progress.hidden = true;
   message.textContent = 'Starting the engine…';
-  useDoomEngine(await DoomEngine.create({ name: WAD.name, data: wad }));
+  useDoomEngine(await DoomEngine.create({ name: wad.name, data }));
   loader.remove();
 
-  let declined = false;
+  // Stored as data only, never put into the page.
+  const source = jatos ? jatos.urlQueryParameters : Object.fromEntries(query);
+  const urlParams = Object.fromEntries(
+    (config.url_params ?? []).filter((name) => typeof source[name] === 'string').map((name) => [name, source[name].slice(0, 200)]),
+  );
+
   const jsPsych = initJsPsych({
     on_finish: () => {
-      jsPsych.getDisplayElement().innerHTML = declined
-        ? '<p>You chose not to take part. Nothing was recorded. You can close this page.</p>'
-        : '<p>Finished. You can close this page.</p>';
+      const text =
+        session.ended === 'declined'
+          ? 'You chose not to take part. Nothing was recorded. You can close this page.'
+          : session.ended === 'withdrawn'
+            ? 'Your data was deleted. Thank you for your time. You can close this page.'
+            : 'Finished. Thank you! You can close this page.';
+      const p = document.createElement('p');
+      p.textContent = text;
+      jsPsych.getDisplayElement().replaceChildren(p);
     },
   });
-
-  const measures = DEFAULT_MEASURES;
-  const recorded = participantDescriptions(measures).map((line) => `<li>${line}</li>`).join('');
-
-  await jsPsych.run([
-    {
-      type: HtmlButtonResponsePlugin,
-      stimulus: `
-        <h1>Before you start</h1>
-        <p>This study uses a first-person video game with monsters, cartoon violence, sudden sounds
-        and flashing lights. If you have photosensitive epilepsy or tend to feel sick when playing
-        video games, please do not take part. You can pause with Esc and stop at any time by
-        closing this page, without giving a reason.</p>`,
-      choices: ['Continue', "I'd rather not take part"],
-      data: { screen: 'content_warning' },
-      on_finish: (data: { response: number }) => {
-        declined = data.response === 1;
-      },
-    },
-    {
-      conditional_function: () => !declined,
-      timeline: [
-        {
-          type: HtmlButtonResponsePlugin,
-          stimulus: `
-            <h1>Doom trial</h1>
-            <p>Find the exit. The trial ends at the exit, if you die, or after 60 seconds of play.</p>
-            <p>W A S D move, the mouse turns, left click fires, E opens doors and presses switches,
-            1–7 switch weapons. Esc pauses the game.</p>
-            <p>While you play, the game records:</p>
-            <ul class="recorded">${recorded}</ul>
-            <p>No name or other personal details are recorded. The data stays in this browser until
-            you download it at the end; nothing is uploaded.</p>`,
-          choices: ['Continue'],
-        },
-        { type: DoomTrialPlugin, map: 1, skill: 3, time_limit: 60, measures },
-        {
-          type: HtmlButtonResponsePlugin,
-          stimulus:
-            '<p>The trial is over. The recorded data stays in this browser until you download it.</p>',
-          choices: ['Download data (JSON)'],
-          on_finish: () => jsPsych.data.get().localSave('json', dataFileName()),
-        },
-      ],
-    },
-  ]);
+  jsPsych.data.addProperties({ study_id: studyId, save_target: target.id, url_params: urlParams });
+  const { timeline, session } = buildTimeline(jsPsych, config, target, dataFileName);
+  await jsPsych.run(timeline);
 }
 
 main().catch((error: unknown) => {
   const text = `Could not start: ${error instanceof Error ? error.message : String(error)}`;
-  if (document.body.contains(loader)) message.textContent = text;
-  else document.body.textContent = text;
+  const box = document.createElement('pre');
+  box.className = 'error';
+  box.textContent = text;
+  if (document.body.contains(loader)) loader.replaceChildren(box);
+  else document.body.replaceChildren(box);
 });

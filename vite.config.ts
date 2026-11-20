@@ -29,4 +29,12 @@ export default defineConfig({
       'doom-engine-build': fileURLToPath(new URL('./src/engine/build', import.meta.url)),
     },
   },
+  build: {
+    rolldownOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        builder: fileURLToPath(new URL('./builder.html', import.meta.url)),
+      },
+    },
+  },
 });

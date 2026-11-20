@@ -1,4 +1,5 @@
-// Packs the production build (dist/) into a JATOS study archive (JZIP) for import into JATOS.
+// Packs the production build (dist/) into a JATOS study archive (JZIP) for one study config:
+// node scripts/build-jatos.mjs <study-id>. npm test checks the configs themselves.
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,17 +7,68 @@ import { crc32, deflateRawSync } from 'node:zlib';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = resolve(root, 'dist');
-const jasFile = resolve(root, 'jatos/demo.jas');
 const { version } = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
-const study = JSON.parse(readFileSync(jasFile, 'utf8'));
+
+const studyId = process.argv[2];
+if (!studyId || !/^[a-z0-9-]+$/.test(studyId)) {
+  throw new Error('Usage: npm run build:jatos -- <study-id> (a file in public/studies, without .json)');
+}
+const config = JSON.parse(readFileSync(resolve(root, `public/studies/${studyId}.json`), 'utf8'));
+if (config.save?.target !== 'jatos' || !config.jatos) {
+  throw new Error(`public/studies/${studyId}.json must have save.target "jatos" and the jatos UUIDs.`);
+}
+const dirName = `jspsych-fps-lab-${studyId}`;
+const study = {
+  version: '3',
+  data: {
+    uuid: config.jatos.study_uuid,
+    title: config.title,
+    description: `Study config public/studies/${studyId}.json, jspsych-fps-lab ${version}.`,
+    groupStudy: false,
+    linearStudy: false,
+    allowPreview: false,
+    dirName,
+    comments: 'Built by npm run build:jatos. Re-importing overwrites these properties.',
+    jsonData: null,
+    endRedirectUrl: '',
+    studyEntryMsg: null,
+    componentList: [
+      {
+        uuid: config.jatos.component_uuid,
+        title: 'Doom study',
+        htmlFilePath: 'index.html',
+        reloadable: true,
+        active: true,
+        comments: '',
+        jsonData: JSON.stringify({ study: studyId }),
+      },
+    ],
+    batchList: [
+      {
+        uuid: config.jatos.batch_uuid,
+        title: 'Default',
+        active: true,
+        maxActiveMembers: null,
+        maxTotalMembers: null,
+        maxTotalWorkers: null,
+        allowedWorkerTypes: ['Jatos', 'PersonalMultiple', 'GeneralMultiple'],
+        comments: null,
+        jsonData: null,
+      },
+    ],
+  },
+};
 // Only what the production build loads plus Freedoom's licence; miniwad never ships.
 const WADS = ['freedoom2.wad.gz', 'freedoom-COPYING.txt', 'freedoom-CREDITS.txt'];
+const STUDIES = ['schema.json', `${studyId}.json`];
 
 function distFiles() {
   return readdirSync(dist, { withFileTypes: true, recursive: true })
     .filter((entry) => entry.isFile())
     .map((entry) => relative(dist, resolve(entry.parentPath, entry.name)).split(sep).join('/'))
     .filter((path) => !path.startsWith('wads/') || WADS.includes(path.slice('wads/'.length)))
+    .filter((path) => !path.startsWith('studies/') || STUDIES.includes(path.slice('studies/'.length)))
+    .filter((path) => path !== 'builder.html')
     .sort();
 }
 
@@ -69,21 +121,24 @@ const files = distFiles();
 if (!files.includes('index.html')) throw new Error('dist/index.html is missing: run npm run build first.');
 for (const name of WADS) {
   if (!files.includes(`wads/${name}`)) {
-    throw new Error(`dist/wads/${name} is missing: add Freedoom to public/wads as .github/workflows/pages.yml does, then rebuild.`);
+    throw new Error(`dist/wads/${name} is missing: add Freedoom to public/wads as .github/actions/add-freedoom does, then rebuild.`);
   }
 }
+for (const name of STUDIES) {
+  if (!files.includes(`studies/${name}`)) throw new Error(`dist/studies/${name} is missing: run npm run build first.`);
+}
 
-const entries = [{ name: 'study.jas', data: readFileSync(jasFile) }];
+const entries = [{ name: 'study.jas', data: Buffer.from(`${JSON.stringify(study, null, 2)}\n`) }];
 for (const path of files) {
   const data = readFileSync(resolve(dist, path));
   entries.push({
-    name: `${study.data.dirName}/${path}`,
+    name: `${dirName}/${path}`,
     data: path === 'index.html' ? Buffer.from(addJatosScript(data.toString('utf8'))) : data,
   });
 }
 
 const outDir = resolve(root, 'dist-jatos');
-const out = resolve(outDir, `${study.data.dirName}-${version}.jzip`);
+const out = resolve(outDir, `${dirName}-${version}.jzip`);
 mkdirSync(outDir, { recursive: true });
 const archive = zip(entries);
 writeFileSync(out, archive);

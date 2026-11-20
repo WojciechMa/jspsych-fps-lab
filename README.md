@@ -1,14 +1,15 @@
 # jspsych-fps-lab
 
-Behavioral experiments on the Doom engine, run as jsPsych trials in the browser and hosted as a
-static site on GitHub Pages. The project plan and rules are in [AGENTS.md](AGENTS.md); planned
-paradigms are in [docs/paradigms.md](docs/paradigms.md).
+Behavioral experiments on the Doom engine, run as jsPsych trials in the browser. The public demo is
+a static site on GitHub Pages; real studies run on a lab-hosted [JATOS](https://www.jatos.org)
+server. The project plan and rules are in [AGENTS.md](AGENTS.md); planned paradigms are in
+[docs/paradigms.md](docs/paradigms.md).
 
-Status: M2, version 0.0.2. A Doom map runs as a jsPsych trial (`doom-trial` plugin);
-researcher-selected measures turn the play into data, and the start screen lists what they record.
-The data can be downloaded as JSON at the end. Nothing is uploaded yet (DataPipe comes in M3). The
-public site plays MAP01 of Freedoom Phase 2: the full IWAD, gzipped (about 11 MB), until the
-trimmed IWAD of M4 exists.
+Status: M3 in progress, version 0.0.2. A Doom map runs as a jsPsych trial (`doom-trial` plugin);
+researcher-selected measures turn the play into data, and the consent page lists what they record.
+A study config picks the trials, measures and save target: download (the only target on Pages) or
+JATOS. DataPipe is planned as an alternative but not implemented yet. The public site plays MAP01
+of Freedoom Phase 2: the full IWAD, gzipped (about 11 MB), until the trimmed IWAD of M4 exists.
 
 ## Build and run
 
@@ -18,7 +19,7 @@ Requirements: Node.js 24 (see `.nvmrc`) and Podman or Docker for the engine buil
 npm ci
 npm run build:engine   # compiles engine/ to src/engine/build in the pinned emscripten image
 npm run dev            # http://localhost:5173
-npm test               # measure and stream-decoder tests on synthetic data (Vitest)
+npm test               # measure, stream-decoder, study-config and builder tests (Vitest)
 npm run build          # type-check + production build in dist/
 ```
 
@@ -31,20 +32,70 @@ Debian container). The container tool is picked automatically; set `CONTAINER_EN
 there (git-ignored). Production builds load `wads/freedoom2.wad.gz`, which the Pages workflow
 downloads from the pinned Freedoom release and gzips.
 
+### Study configs
+
+A study is a JSON file `public/studies/<id>.json`, checked against
+[public/studies/schema.json](public/studies/schema.json) when the page loads; any problem stops
+the page with a list of all of them. The page loads `?study=<id>` (default `demo`), or in JATOS
+the study named in the component's JSON input. [demo.json](public/studies/demo.json) is the Pages
+demo (download only); [jatos-demo.json](public/studies/jatos-demo.json) saves to JATOS.
+
+Participants see: content warning → consent (the recorded data and where it goes) → how to play →
+the trials, each followed by a save step → a summary of their data with submit, download or
+withdraw → end page. Declining at the warning or the consent records nothing. URL parameters
+listed in `url_params` are stored as data (only those names, at most 200 characters each).
+
+The study builder (`/builder.html`: http://localhost:5173/builder.html with `npm run dev`, or
+under the Pages URL) writes these files without editing JSON by hand: pick the trials (map,
+skill, time limit), the measures and their parameters, and where the data goes. It shows the
+problems the page would report, the estimated data size against the JATOS limits, and the
+participant-facing pages (warning, consent with the recorded measures, instructions, trials).
+Download the JSON, save it as `public/studies/<id>.json` and commit it. Nothing is sent anywhere;
+the draft stays in the browser's local storage. It can also open an existing config to edit it.
+The builder is not packed into JATOS study archives.
+
 ### JATOS (local test server)
 
 ```sh
-npm run jatos:local start   # JATOS in a container at http://localhost:9000 (admin / admin)
-npm run build:jatos         # production build packed as dist-jatos/jspsych-fps-lab-demo-<version>.jzip
-npm run jatos:local stop    # keeps the data volume; `reset` deletes it
+npm run jatos:local start             # JATOS in a container at http://localhost:9000 (admin / admin)
+npm run build:jatos -- jatos-demo     # packs that study as dist-jatos/jspsych-fps-lab-jatos-demo-<version>.jzip
+npm run jatos:local stop              # keeps the data volume; `reset` deletes it
 ```
 
 In JATOS: Studies > + > Import study, pick the `.jzip`, then Study links > General Multiple to get
-a participant link. The archive needs `freedoom2.wad.gz`, `freedoom-COPYING.txt` and
-`freedoom-CREDITS.txt` in `public/wads` (the Pages workflow shows how to fetch them); miniwad is
-not packed. The server listens on 127.0.0.1 only because of the default login. JATOS serves
-`.wasm` as `application/octet-stream`, so the browser logs a warning and compiles the engine
-without streaming; it still runs. Nothing is sent to JATOS yet.
+a participant link. Only studies with `save.target: "jatos"` and the `jatos` UUIDs can be packed;
+the UUIDs stay fixed, so re-importing a new build updates the same JATOS study and keeps its
+results. The archive holds the site, that one study config and the schema, and needs
+`freedoom2.wad.gz`, `freedoom-COPYING.txt` and `freedoom-CREDITS.txt` in `public/wads` (see
+[.github/actions/add-freedoom](.github/actions/add-freedoom/action.yml) for how to fetch them);
+miniwad is not packed. The server listens on 127.0.0.1 only
+because of the default login. JATOS serves `.wasm` as `application/octet-stream`, so the browser
+logs a warning and compiles the engine without streaming; it still runs.
+
+What JATOS stores per study run, after each trial: one line of result data (the trial's data row
+with the measure summaries, as NDJSON) and the raw streams as files `trial-NNN-<measure>.json`,
+plus the demo as `trial-NNN-demo.lmp`. Screens before the trials (warning, consent) are sent with
+the first trial. Submitting ends the run as FINISHED; withdrawing calls `abortStudy`, which deletes
+the run's data and files (ABORTED). A run that stops early keeps what was sent so far but never
+reaches FINISHED: use it for debugging only.
+
+### Deploying a study to the lab JATOS
+
+GitHub Pages only hosts the public demo; a study reaches JATOS through the manual workflow
+[Deploy study to JATOS](.github/workflows/jatos.yml): Actions > Deploy study to JATOS > Run
+workflow, enter the study id and pick the target. It builds the engine and the study's `.jzip`
+(also kept as a run artifact for a manual import) and imports it with `POST
+/jatos/api/v1/studies`, which overwrites the study with the same UUID and keeps its results.
+
+Setup, once per JATOS server:
+
+1. In JATOS, create a dedicated user for deployments and an API token for it (in that user's
+   profile). The first import makes that user a member of the study; for a study imported earlier
+   by someone else, add the user as a member first.
+2. In GitHub, Settings > Environments, create an environment (e.g. `jatos-lab`) with required
+   reviewers and the secrets `JATOS_URL` (`https://…`, the server's base URL) and `JATOS_TOKEN`.
+
+Don't deploy while participants are running the study: the import replaces its files.
 
 Behind a TLS-intercepting proxy, npm may fail with `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`. Setting
 `NODE_OPTIONS=--use-system-ca` makes Node trust the operating system's certificates.
