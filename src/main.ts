@@ -1,4 +1,5 @@
-// Demo timeline: one Doom trial with the default measures, ending with a JSON download of the data.
+// Demo timeline: content warning, then one Doom trial with the default measures, ending with a JSON
+// download of the data.
 import 'jspsych/css/jspsych.css';
 import './style.css';
 import HtmlButtonResponsePlugin from '@jspsych/plugin-html-button-response';
@@ -67,9 +68,12 @@ async function main(): Promise<void> {
   useDoomEngine(await DoomEngine.create({ name: WAD.name, data: wad }));
   loader.remove();
 
+  let declined = false;
   const jsPsych = initJsPsych({
     on_finish: () => {
-      jsPsych.getDisplayElement().innerHTML = '<p>Finished. You can close this page.</p>';
+      jsPsych.getDisplayElement().innerHTML = declined
+        ? '<p>You chose not to take part. Nothing was recorded. You can close this page.</p>'
+        : '<p>Finished. You can close this page.</p>';
     },
   });
 
@@ -80,22 +84,42 @@ async function main(): Promise<void> {
     {
       type: HtmlButtonResponsePlugin,
       stimulus: `
-        <h1>Doom trial</h1>
-        <p>Find the exit. The trial ends at the exit, if you die, or after 60 seconds of play.</p>
-        <p>W A S D move, the mouse turns, left click fires, E opens doors and presses switches,
-        1–7 switch weapons. Esc pauses the game.</p>
-        <p>While you play, the game records:</p>
-        <ul class="recorded">${recorded}</ul>
-        <p>No name or other personal details are recorded. The data stays in this browser until you
-        download it at the end; nothing is uploaded.</p>`,
-      choices: ['Continue'],
+        <h1>Before you start</h1>
+        <p>This study uses a first-person video game with monsters, cartoon violence, sudden sounds
+        and flashing lights. If you have photosensitive epilepsy or tend to feel sick when playing
+        video games, please do not take part. You can pause with Esc and stop at any time by
+        closing this page, without giving a reason.</p>`,
+      choices: ['Continue', "I'd rather not take part"],
+      data: { screen: 'content_warning' },
+      on_finish: (data: { response: number }) => {
+        declined = data.response === 1;
+      },
     },
-    { type: DoomTrialPlugin, map: 1, skill: 3, time_limit: 60, measures },
     {
-      type: HtmlButtonResponsePlugin,
-      stimulus: '<p>The trial is over. The recorded data stays in this browser until you download it.</p>',
-      choices: ['Download data (JSON)'],
-      on_finish: () => jsPsych.data.get().localSave('json', dataFileName()),
+      conditional_function: () => !declined,
+      timeline: [
+        {
+          type: HtmlButtonResponsePlugin,
+          stimulus: `
+            <h1>Doom trial</h1>
+            <p>Find the exit. The trial ends at the exit, if you die, or after 60 seconds of play.</p>
+            <p>W A S D move, the mouse turns, left click fires, E opens doors and presses switches,
+            1–7 switch weapons. Esc pauses the game.</p>
+            <p>While you play, the game records:</p>
+            <ul class="recorded">${recorded}</ul>
+            <p>No name or other personal details are recorded. The data stays in this browser until
+            you download it at the end; nothing is uploaded.</p>`,
+          choices: ['Continue'],
+        },
+        { type: DoomTrialPlugin, map: 1, skill: 3, time_limit: 60, measures },
+        {
+          type: HtmlButtonResponsePlugin,
+          stimulus:
+            '<p>The trial is over. The recorded data stays in this browser until you download it.</p>',
+          choices: ['Download data (JSON)'],
+          on_finish: () => jsPsych.data.get().localSave('json', dataFileName()),
+        },
+      ],
     },
   ]);
 }
