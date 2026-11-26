@@ -65,6 +65,17 @@ describe('study configs', () => {
     ]);
   });
 
+  it('allows custom faces only for JATOS studies', () => {
+    const uuid = '00000000-0000-4000-8000-000000000000';
+    const jatos = { study_uuid: uuid, component_uuid: uuid, batch_uuid: uuid };
+    expect(checkStudy({ ...minimal(), face: 'freedoom' }, schema)).toEqual([]);
+    expect(checkStudy({ ...minimal(), face: 'lab-a' }, schema)).toEqual([
+      'config.face "lab-a" needs save.target "jatos": faces of real people never go on GitHub Pages',
+    ]);
+    expect(checkStudy({ ...minimal(), face: 'lab-a', save: { target: 'jatos' }, jatos }, schema)).toEqual([]);
+    expect(checkStudy({ ...minimal(), face: '../x' }, schema)).toEqual(['config.face has an invalid format']);
+  });
+
   it('checks the estimated data size against JATOS limits', () => {
     const trial = { map: 1, time_limit: 900 };
     const config: StudyConfig = {

@@ -18,10 +18,12 @@
     "build:maps": "node scripts/build-maps.mjs",
     "fetch:freedoom": "node scripts/fetch-freedoom.mjs",
     "build:iwad": "node scripts/build-iwad.mjs",
+    "build:face": "node scripts/build-face.mjs",
     "build:jatos": "npm run build && node scripts/build-jatos.mjs",
     "jatos:local": "node scripts/jatos-local.mjs"
   },
   "devDependencies": {
+    "sharp": "^0.35.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"

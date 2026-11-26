@@ -223,7 +223,8 @@ function studySection(): HTMLElement {
       ),
       el('small', { textContent: 'Their maps replace the IWAD\'s levels in the same MAPxx slots. Built from maps/*.json with npm run build:maps.' }),
     ),
-    el('p', { className: 'help', textContent: 'Game data: Freedoom Phase 2. Status-bar face: Freedoom\'s.' }),
+    field('Status-bar face', textInput(draft.face, (v) => (draft.face = v), { pattern: '[a-z0-9\\-]+', placeholder: 'freedoom' }), 'Empty: Freedoom\'s. Or the id of a face built with npm run build:face (faces/<id>, kept out of the repository); needs the JATOS save target.'),
+    el('p', { className: 'help', textContent: 'Game data: Freedoom Phase 2.' }),
   );
 }
 

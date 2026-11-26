@@ -1,9 +1,12 @@
 // Packs the production build (dist/) into a JATOS study archive (JZIP) for one study config:
-// node scripts/build-jatos.mjs <study-id>. npm test checks the configs themselves.
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+// node scripts/build-jatos.mjs <study-id> [--no-face]. npm test checks the configs themselves.
+// A custom face comes from public/wads/face-<id>.wad (npm run build:face); --no-face leaves it
+// out for the deploy workflow, which adds it from a secret.
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { crc32, deflateRawSync } from 'node:zlib';
+import { readWad } from './lib/wad.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = resolve(root, 'dist');
@@ -11,7 +14,7 @@ const { version } = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8
 
 const studyId = process.argv[2];
 if (!studyId || !/^[a-z0-9-]+$/.test(studyId)) {
-  throw new Error('Usage: npm run build:jatos -- <study-id> (a file in public/studies, without .json)');
+  throw new Error('Usage: npm run build:jatos -- <study-id> [--no-face] (a file in public/studies, without .json)');
 }
 const config = JSON.parse(readFileSync(resolve(root, `public/studies/${studyId}.json`), 'utf8'));
 if (config.save?.target !== 'jatos' || !config.jatos) {
@@ -144,10 +147,25 @@ for (const path of files) {
   });
 }
 
+const face = config.face ?? 'freedoom';
+const withFace = face !== 'freedoom' && !process.argv.includes('--no-face');
+if (withFace) {
+  if (!/^[a-z0-9-]+$/.test(face)) throw new Error(`Invalid face id "${face}".`);
+  const facePath = resolve(root, `public/wads/face-${face}.wad`);
+  if (!existsSync(facePath)) throw new Error(`public/wads/face-${face}.wad is missing: run npm run build:face -- ${face}.`);
+  const data = readFileSync(facePath);
+  const { type, lumps } = readWad(data);
+  if (type !== 'PWAD' || !lumps.every((lump) => lump.name.startsWith('STF'))) {
+    throw new Error(`public/wads/face-${face}.wad must be a PWAD of STF* patches only.`);
+  }
+  entries.push({ name: `${dirName}/wads/face-${face}.wad`, data });
+}
+
 const outDir = resolve(root, 'dist-jatos');
 const out = resolve(outDir, `${dirName}-${version}.jzip`);
 mkdirSync(outDir, { recursive: true });
 const archive = zip(entries);
 writeFileSync(out, archive);
-console.log(`Wrote ${relative(root, out)} (${(archive.length / 1e6).toFixed(1)} MB, ${files.length} files).`);
+console.log(`Wrote ${relative(root, out)} (${(archive.length / 1e6).toFixed(1)} MB, ${entries.length - 1} files).`);
+if (withFace) console.log(`It contains the face "${face}": keep it private (no public uploads or artifacts).`);
 console.log('Import it in JATOS: Studies > + > Import study.');

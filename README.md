@@ -21,7 +21,7 @@ Requirements: Node.js 24 (see `.nvmrc`) and Podman or Docker for the engine buil
 npm ci
 npm run build:engine   # compiles engine/ to src/engine/build in the pinned emscripten image
 npm run dev            # http://localhost:5173
-npm test               # measure, stream-decoder, study-config, builder, map and IWAD tests (Vitest)
+npm test               # measure, stream-decoder, study-config, builder, map, IWAD and face tests (Vitest)
 npm run build          # type-check + production build in dist/
 ```
 
@@ -135,6 +135,48 @@ Download the JSON, save it as `public/studies/<id>.json` and commit it. Nothing 
 the draft stays in the browser's local storage. It can also open an existing config to edit it.
 The builder is not packed into JATOS study archives.
 
+### Status-bar faces
+
+A study can replace the status-bar face with photos of a real person (`"face": "<id>"`; default
+`"freedoom"`). That person's written consent is needed, and never use photos of participants. Photos
+and built faces stay out of the repository and off GitHub Pages: `faces/` and `public/wads/face-*`
+are git-ignored, production builds drop face WADs, and only studies with `save.target: "jatos"`
+may set a face. Pick a neutral id (e.g. `lab-a`), since the study config is public.
+
+Put the photos and a `face.json` in `faces/<id>/`:
+
+```json
+{
+  "consent": "Written consent of the person shown, kept in …",
+  "photos": {
+    "straight": ["front.jpg", { "file": "front2.jpg", "crop": [40, 10, 600, 720] }],
+    "turn_left": "left.jpg", "turn_right": "right.jpg",
+    "ouch": "ouch.jpg", "grin": "grin.jpg", "kill": "angry.jpg", "god": "god.jpg", "dead": "dead.jpg"
+  },
+  "mask": "oval",
+  "pain": "tint"
+}
+```
+
+Only `straight` is required (1–3 photos the engine alternates between while idle); the other
+expressions fall back to it, and the dead face to a dark grey version of it. `crop` is `[left,
+top, width, height]` in pixels of the upright photo; without it the centre of the photo is used.
+Each photo is scaled to 24 × 29 pixels (the size of Doom's own face) and matched to the Doom
+palette. `mask: "oval"` (default) shows an oval cut-out, `"none"` the full rectangle;
+`pain: "tint"` (default) reddens and darkens the face over the five health levels, `"none"`
+keeps it as it is. Then:
+
+```sh
+npm run build:face -- <id>   # writes public/wads/face-<id>.wad and faces/<id>/preview.png
+```
+
+Check the preview (one row per health level, then god mode and dead). In `npm run dev`,
+`?face=<id>` shows a face in any study. `npm run build:jatos` packs the face into the study's
+JZIP: keep that file private. For the deploy workflow, add the secret `FACE_<ID>` (upper case,
+`-` as `_`) to the GitHub environment, with the contents of `faces/<id>/face-<id>.wad.gz.b64` as
+its value (build:face prints the name and size; GitHub allows 48 KB). The workflow adds the face
+only in the deploy job, so the run's JZIP artifact never contains it.
+
 ### JATOS (local test server)
 
 ```sh
@@ -176,6 +218,7 @@ Setup, once per JATOS server:
    by someone else, add the user as a member first.
 2. In GitHub, Settings > Environments, create an environment (e.g. `jatos-lab`) with required
    reviewers and the secrets `JATOS_URL` (`https://…`, the server's base URL) and `JATOS_TOKEN`.
+   Studies with a custom face also need its `FACE_<ID>` secret (see Status-bar faces).
 
 Don't deploy while participants are running the study: the import replaces its files.
 
@@ -251,6 +294,8 @@ resolution even on faster displays.
   `public/wads/two-door-bandit.wad`): part of this
   project, GPL-2.0-or-later. They use
   only textures and flats of the IWAD.
+- Status-bar faces (`faces/`, `public/wads/face-*`): not part of the repository or the public
+  site; the person shown keeps the rights to their photos.
 - Build tools that are not shipped: emscripten, deutex, [wadptr](https://github.com/fragglet/wadptr)
   (GPL-2.0), [ZDBSP](https://zdoom.org/wiki/ZDBSP) (GPL-2.0-or-later, the Debian package), Vite,
-  TypeScript, Vitest.
+  TypeScript, Vitest, [sharp](https://sharp.pixelplumbing.com) (Apache-2.0; for faces).

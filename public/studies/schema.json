@@ -43,8 +43,9 @@
       "items": { "type": "string", "pattern": "^[a-z0-9-]+\\.wad$" }
     },
     "face": {
-      "description": "Status-bar face: \"freedoom\" (the IWAD's own) or a face id (M4).",
-      "enum": ["freedoom"]
+      "description": "Status-bar face: \"freedoom\" (default, the IWAD's own) or the id of a face built with npm run build:face (faces/<id>, never public). Custom faces need save.target \"jatos\".",
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
     },
     "url_params": {
       "description": "Names of URL query parameters to store with the data (never shown on the page).",

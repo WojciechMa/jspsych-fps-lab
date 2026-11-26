@@ -188,7 +188,8 @@ M4 paradigm registry + engine modes; first paradigms with custom maps: maze navi
    kill; + god, dead) as a face PWAD by script. Chosen per study by the config's `face` field
    ("freedoom" or a face id), since ST_Init loads the patches once at boot. A face of a real
    person needs their written consent; photos and built face PWADs stay out of the public repo
-   (git-ignored faces/; how the JATOS workflow gets them is decided in M4) and never go on Pages.
+   (git-ignored faces/; the JATOS workflow adds the face PWAD in its deploy job from the environment
+   secret FACE_<ID>, never to an artifact) and never go on Pages.
    Never participant photos.
 M5 offline replay (Node CLI, also used by CI): demo + WADs + mode/params/seed → recomputed
    engine-derived measures; must match live data (input_log and session_quality excluded).

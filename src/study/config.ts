@@ -62,7 +62,8 @@ export interface StudyConfig {
   fullscreen?: boolean;
   iwad?: 'freedoom2-lab.wad';
   wads?: string[];
-  face?: 'freedoom';
+  /** "freedoom" (default) or a face id: public/wads/face-<id>.wad from npm run build:face. */
+  face?: string;
   url_params?: string[];
   completion_url?: string;
   save: { target: SaveTargetId; datapipe_experiment_id?: string };
@@ -191,6 +192,9 @@ export function checkStudy(config: unknown, schema: Schema, manifest: WadManifes
   const study = config as StudyConfig;
   problems.push(...checkQuestionnaires(study));
   problems.push(...checkMaps(study, manifest));
+  if (study.face && study.face !== 'freedoom' && study.save.target !== 'jatos') {
+    problems.push(`config.face "${study.face}" needs save.target "jatos": faces of real people never go on GitHub Pages`);
+  }
   allTrials(study).forEach((trial, i) => {
     const paradigm = trialParadigm(trial);
     try {

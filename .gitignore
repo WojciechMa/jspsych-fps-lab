@@ -5,4 +5,7 @@ engine/build/
 src/engine/build/
 # Freedoom files come from the Pages workflow (or a local copy for testing); never committed.
 public/wads/freedoom*
+# Photos of real people and the face WADs built from them stay private.
+faces/
+public/wads/face-*
 *.log

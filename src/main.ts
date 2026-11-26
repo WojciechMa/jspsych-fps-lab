@@ -74,7 +74,7 @@ async function main(): Promise<void> {
     progress.value = fraction;
   }).catch((error: unknown) => {
     if (!import.meta.env.DEV) throw error;
-    throw new Error(`${String(error)}. Put ${wad.url.split('/').pop()} into public/wads, as .github/actions/add-freedoom does.`);
+    throw new Error(`${String(error)}. Run npm run fetch:freedoom && npm run build:iwad (miniwad: npm run build:miniwad).`);
   });
   // Map WADs are small and served as they are.
   const pwads = await Promise.all(
@@ -83,10 +83,20 @@ async function main(): Promise<void> {
       data: await fetchWithProgress(`${import.meta.env.BASE_URL}wads/${name}`, () => {}),
     })),
   );
+  // Loaded last, so its STF* patches replace the IWAD's. Dev builds also take ?face=<id> to preview one.
+  const requestedFace = import.meta.env.DEV ? query.get('face') : null;
+  const face = requestedFace && /^[a-z0-9-]+$/.test(requestedFace) ? requestedFace : (config.face ?? 'freedoom');
+  if (face !== 'freedoom') {
+    const name = `face-${face}.wad`;
+    const data = await fetchWithProgress(`${import.meta.env.BASE_URL}wads/${name}`, () => {}).catch((error: unknown) => {
+      throw new Error(`${String(error)}. Faces ship only in JATOS builds; locally, run npm run build:face -- ${face}.`);
+    });
+    pwads.push({ name, data });
+  }
   progress.hidden = true;
   message.textContent = 'Starting the engine…';
   const doom = await DoomEngine.create({ name: wad.name, data }, pwads);
-  for (const { name, sha256 } of doom.info.wads.slice(1)) {
+  for (const { name, sha256 } of doom.info.wads.slice(1, 1 + (config.wads ?? []).length)) {
     if (sha256 !== manifest.wads[name].sha256) throw new Error(`wads/${name} doesn't match wads/manifest.json; run npm run build:maps.`);
   }
   useDoomEngine(doom);

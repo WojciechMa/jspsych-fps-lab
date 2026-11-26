@@ -34,6 +34,8 @@ export interface Draft {
   jatos: NonNullable<StudyConfig['jatos']>;
   /** Map WADs from public/wads/manifest.json. */
   wads: string[];
+  /** Face id; empty: Freedoom's. */
+  face: string;
   measures: Record<string, MeasureChoice>;
   /** Trials without `measures`: those come from `Draft.measures`. */
   blocks: BlockConfig[];
@@ -70,6 +72,7 @@ export function blankDraft(): Draft {
     datapipe_experiment_id: '',
     jatos: { study_uuid: '', component_uuid: '', batch_uuid: '' },
     wads: [],
+    face: '',
     measures: defaultMeasures(),
     blocks: [{ trials: [newTrial()] }],
     questionnaires: [],
@@ -120,6 +123,7 @@ export function toConfig(draft: Draft): ExportedConfig {
     instructions_html: text(draft.instructions_html),
     fullscreen: draft.fullscreen ? undefined : false,
     wads: draft.wads.length ? [...draft.wads] : undefined,
+    face: draft.face.trim() && draft.face.trim() !== 'freedoom' ? draft.face.trim() : undefined,
     url_params: urlParams.length ? urlParams : undefined,
     completion_url: text(draft.completion_url),
     save:
@@ -198,6 +202,7 @@ export function fromConfig(config: StudyConfig, id: string): { draft: Draft; not
     datapipe_experiment_id: config.save.datapipe_experiment_id ?? '',
     jatos: config.jatos ? { ...config.jatos } : { study_uuid: '', component_uuid: '', batch_uuid: '' },
     wads: [...(config.wads ?? [])],
+    face: config.face && config.face !== 'freedoom' ? config.face : '',
     measures,
     blocks: config.blocks.map((block) => ({
       ...block,

@@ -5,6 +5,8 @@ name: Deploy study to JATOS
 # with the same UUID (properties and assets) and keeps its results. Each target is a GitHub
 # environment holding the secrets JATOS_URL (e.g. https://jatos.example.org) and JATOS_TOKEN (API
 # token of a dedicated JATOS user who is a member of the study); give it required reviewers.
+# A study with a custom face also needs the secret FACE_<ID> (npm run build:face prints it). The
+# face goes into the JZIP only in the deploy job, so the uploaded artifact never contains it.
 
 on:
   workflow_dispatch:
@@ -30,6 +32,9 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       jzip: ${{ steps.pack.outputs.jzip }}
+      dir: ${{ steps.pack.outputs.dir }}
+      face: ${{ steps.pack.outputs.face }}
+      face_secret: ${{ steps.pack.outputs.face_secret }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -47,11 +52,17 @@ jobs:
           STUDY: ${{ inputs.study }}
         run: |
           [[ "$STUDY" =~ ^[a-z0-9-]+$ ]] || { echo "Invalid study id: $STUDY"; exit 1; }
-          npm run build:jatos -- "$STUDY"
+          npm run build:jatos -- "$STUDY" --no-face
           files=(dist-jatos/*.jzip)
           [[ ${#files[@]} -eq 1 ]] || { echo "Expected one .jzip, found ${#files[@]}"; exit 1; }
           echo "jzip=$(basename "${files[0]}")" >> "$GITHUB_OUTPUT"
-      # Also kept for a manual import (Studies > + > Import study).
+          echo "dir=jspsych-fps-lab-$STUDY" >> "$GITHUB_OUTPUT"
+          face=$(jq -r '.face // "freedoom"' "public/studies/$STUDY.json")
+          [[ "$face" =~ ^[a-z0-9-]+$ ]] || { echo "Invalid face id: $face"; exit 1; }
+          echo "face=$face" >> "$GITHUB_OUTPUT"
+          secret="FACE_${face^^}"
+          echo "face_secret=${secret//-/_}" >> "$GITHUB_OUTPUT"
+      # Also kept for a manual import (Studies > + > Import study); without a custom face.
       - uses: actions/upload-artifact@v7
         with:
           name: jzip
@@ -66,6 +77,21 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: jzip
+      - name: Add the face
+        if: needs.build.outputs.face != 'freedoom'
+        env:
+          FACE: ${{ needs.build.outputs.face }}
+          FACE_SECRET: ${{ needs.build.outputs.face_secret }}
+          FACE_WAD: ${{ secrets[needs.build.outputs.face_secret] }}
+          DIR: ${{ needs.build.outputs.dir }}
+          JZIP: ${{ needs.build.outputs.jzip }}
+        run: |
+          [[ -n "$FACE_WAD" ]] || { echo "Secret $FACE_SECRET is missing in this environment (see npm run build:face)"; exit 1; }
+          mkdir -p "$DIR/wads"
+          base64 -d <<< "$FACE_WAD" | gunzip > "$DIR/wads/face-$FACE.wad"
+          [[ "$(head -c 4 "$DIR/wads/face-$FACE.wad")" == PWAD ]] || { echo "Secret $FACE_SECRET is not a gzipped, base64-encoded PWAD"; exit 1; }
+          zip -q -X "$JZIP" "$DIR/wads/face-$FACE.wad"
+          rm -r "$DIR"
       - name: Import into JATOS
         env:
           JATOS_URL: ${{ secrets.JATOS_URL }}

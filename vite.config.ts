@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { readFileSync, rmSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
@@ -18,7 +18,8 @@ function gitCommit(): string {
   }
 }
 
-// Dev-only WADs in public/wads: production loads the trimmed IWAD (npm run build:iwad).
+// Dev-only WADs in public/wads: production loads the trimmed IWAD (npm run build:iwad). Face WADs
+// (face-*) never go into the build either: build-jatos adds them to a study's JZIP.
 const DEV_ONLY_WADS = ['miniwad.wad', 'miniwad-LICENSE.txt', 'freedoom2.wad', 'freedoom2.wad.gz'];
 
 function dropDevWads(): Plugin {
@@ -30,7 +31,9 @@ function dropDevWads(): Plugin {
       outDir = resolve(config.root, config.build.outDir);
     },
     closeBundle() {
-      for (const name of DEV_ONLY_WADS) rmSync(resolve(outDir, 'wads', name), { force: true });
+      const wads = resolve(outDir, 'wads');
+      const faces = readdirSync(wads).filter((name) => name.startsWith('face-'));
+      for (const name of [...DEV_ONLY_WADS, ...faces]) rmSync(resolve(wads, name), { force: true });
     },
   };
 }
