@@ -12,10 +12,10 @@ config picks paradigms, maps and measures; participants see exactly what is reco
   Audio sound effects, no SDL. Single-threaded (GitHub Pages can't send COOP/COEP headers).
 - Repo: public on GitHub; license GPL-2.0-or-later (as in the doomgeneric source headers). LICENSE
   holds the GPL v2 text; README and package.json state "or later".
-- Game data: no id Software WADs. Doom II mode (MAP01–MAP32). miniwad for development and tests
-  only, never on the public page; participants get a trimmed IWAD built by script from Freedoom
-  Phase 2 (BSD-3). Until it exists (M4), the public demo loads the full freedoom2.wad, gzipped by
-  the Pages workflow (~11 MB, over budget). Our maps ship as PWADs with maps and wall textures
+- Game data: no id Software WADs. Doom II mode (MAP01–MAP32). Development uses Freedoom like
+  production; miniwad for tests only, never on the public page; participants get a trimmed IWAD built by script from Freedoom
+  Phase 2 (BSD-3): `npm run fetch:freedoom` downloads Freedoom, `npm run build:iwad` builds it
+  (CI and local, never committed). Our maps ship as PWADs with maps and wall textures
   only; new flats/sprites go into the IWAD. No music.
 - Web: TypeScript + Vite + jsPsych 8.x, static build output. Node LTS installed locally
   (fallback: run Node in Podman).
@@ -37,7 +37,7 @@ config picks paradigms, maps and measures; participants see exactly what is reco
   with Docker. CI: GitHub Actions builds engine + site and deploys to Pages; a manual workflow
   deploys a study to JATOS. Pins: emsdk image in
   scripts/build-engine.mjs, Node in .nvmrc, upstream commits in engine/UPSTREAM and
-  scripts/build-miniwad.mjs, Freedoom release in .github/actions/add-freedoom/action.yml, JATOS image in
+  scripts/build-miniwad.mjs, Freedoom release and trimmed-IWAD maps/hash in src/paradigms/iwad.json, JATOS image in
   scripts/jatos-local.mjs.
 - Desktop only for now: keyboard + mouse, fullscreen, pointer lock; Chromium-based browsers and
   Firefox. Exclude mobile and Safari via plugin-browser-check (mobile: see Side projects).

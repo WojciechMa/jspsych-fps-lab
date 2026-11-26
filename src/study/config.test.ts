@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { IWAD, mapLabel, type WadManifest } from '../paradigms/manifest';
+import { PARADIGMS, resolveParadigmParams } from '../paradigms/registry';
 import { splitRecord } from '../save/records';
-import { checkStudy, estimateBytes, meetsDeviceRequirements, type StudyConfig } from './config';
+import { checkStudy as checkStudyWith, estimateBytes, meetsDeviceRequirements, type StudyConfig, trialMeasures } from './config';
 import { checkSchema, type Schema } from './schema-check';
 
 const studyFiles = import.meta.glob('../../public/studies/*.json', { eager: true, import: 'default' });
 const schema = studyFiles['../../public/studies/schema.json'] as Schema;
+const manifest = Object.values(
+  import.meta.glob('../../public/wads/manifest.json', { eager: true, import: 'default' }),
+)[0] as WadManifest;
+const checkStudy = (config: unknown, s: Schema, m: WadManifest = manifest) => checkStudyWith(config, s, m);
 
 const minimal = (): StudyConfig => ({
   title: 'Test',
@@ -90,6 +96,124 @@ describe('study configs', () => {
       'config.questionnaires[1].questions[0].labels is not used by choice questions',
       'config.questionnaires[1].questions[0].name "a" is used twice',
     ]);
+  });
+});
+
+describe('paradigms and map WADs', () => {
+  const fake: WadManifest = {
+    wads: {
+      'maze.wad': { bytes: 1, sha256: 'x', source: 'maps/maze.json', maps: [{ slot: 1, name: 'm1', paradigm: 'maze', rois: {} }, { slot: 2, name: 'm2', paradigm: 'maze', rois: {} }] },
+      'other.wad': { bytes: 1, sha256: 'y', source: 'maps/other.json', maps: [{ slot: 2, name: 'o2', paradigm: 'maze', rois: {} }] },
+    },
+  };
+  const study = (wads: string[], ...trials: StudyConfig['blocks'][0]['trials']): StudyConfig => ({ ...minimal(), wads, blocks: [{ trials }] });
+
+  it('accepts maze trials on maze maps and classic trials on IWAD slots', () => {
+    expect(checkStudy(study(['maze.wad'], { paradigm: 'maze', map: 2, time_limit: 60 }, { map: 6, time_limit: 60 }), schema, fake)).toEqual([]);
+  });
+
+  it('rejects classic trials on levels the trimmed IWAD leaves out', () => {
+    expect(IWAD.maps).toContain(1);
+    expect(checkStudy(study([], { map: 5, time_limit: 60 }), schema, fake)).toEqual([
+      `trial 1: MAP05 is not in ${IWAD.name} (its levels: ${IWAD.maps.map(mapLabel).join(', ')})`,
+    ]);
+  });
+
+  it('rejects maze trials without a maze map and classic trials on replaced slots', () => {
+    expect(checkStudy(study([], { paradigm: 'maze', map: 1, time_limit: 60 }), schema, fake)).toEqual([
+      "trial 1: maze trials need a maze map from config.wads; MAP01 isn't one (available: none)",
+    ]);
+    expect(checkStudy(study(['maze.wad'], { map: 1, time_limit: 60 }), schema, fake)).toEqual([
+      'trial 1: MAP01 is "m1" from maze.wad, a maze map; set "paradigm": "maze"',
+    ]);
+  });
+
+  it('rejects unknown WADs, WADs listed twice and slots defined twice', () => {
+    expect(checkStudy(study(['nope.wad'], { map: 5, time_limit: 60 }), schema, fake)[0]).toMatch(/^config.wads: nope.wad is not in wads\/manifest.json/);
+    expect(checkStudy(study(['maze.wad', 'maze.wad'], { map: 5, time_limit: 60 }), schema, fake)).toContain('config.wads lists a WAD twice');
+    expect(checkStudy(study(['maze.wad', 'other.wad'], { map: 5, time_limit: 60 }), schema, fake)).toEqual(['config.wads: other.wad and maze.wad both define MAP02']);
+    expect(checkStudy(study(['Maze.WAD'], { map: 5, time_limit: 60 }), schema, fake)).toEqual(['config.wads[0] has an invalid format']);
+  });
+
+  it("uses the paradigm's default measures", () => {
+    const trialSchema = (schema.$defs as Record<string, { properties: Record<string, { enum: string[] }> }>).trial;
+    expect(trialSchema.properties.paradigm.enum).toEqual(PARADIGMS.map((p) => p.id));
+    expect(trialMeasures({ map: 1, time_limit: 1 })).toContain('threat_rt');
+    expect(trialMeasures({ paradigm: 'maze', map: 1, time_limit: 1 })).toEqual(['session_quality', 'input_log', 'trajectory', 'roi', 'demo']);
+  });
+
+  it('has a manifest entry with ROI names for every maze map', () => {
+    const maze = manifest.wads['maze.wad'];
+    expect(maze.sha256).toMatch(/^[0-9a-f]{64}$/);
+    for (const map of maze.maps) expect(map).toMatchObject({ paradigm: 'maze', rois: { 900: 'start', 901: 'goal' } });
+  });
+
+  it('has spawn spots for every threat-corridor map', () => {
+    const corridor = manifest.wads['threat-corridor.wad'];
+    for (const map of corridor.maps as (WadManifest['wads'][string]['maps'][number] & { corridor: { pairs: number; spots: { name: string }[] } })[]) {
+      expect(map.paradigm).toBe('threat-corridor');
+      expect(map.corridor.spots.map((s) => s.name).slice(0, 2)).toEqual(['behind', 'ahead']);
+      expect(map.corridor.spots).toHaveLength(2 + 2 * map.corridor.pairs);
+    }
+  });
+
+  it("checks the paradigm's params and seed", () => {
+    const corridor: WadManifest = {
+      wads: { 't.wad': { bytes: 1, sha256: 'x', source: 'maps/t.json', maps: [{ slot: 10, name: 't', paradigm: 'threat-corridor', rois: {} }] } },
+    };
+    const trial = (params: Record<string, unknown>, seed?: number) => ({
+      paradigm: 'threat-corridor', map: 10, time_limit: 60, params, ...(seed === undefined ? {} : { seed }),
+    });
+    expect(checkStudy(study(['t.wad'], trial({ threats: 5, monster: 'imp' }, 7)), schema, corridor)).toEqual([]);
+    expect(checkStudy(study(['t.wad'], trial({ threats: 0, colour: 1 })), schema, corridor)).toEqual([
+      'trial 1: threat-corridor.threats must be at least 1.',
+    ]);
+    expect(checkStudy(study(['t.wad'], trial({ colour: 1 })), schema, corridor)).toEqual(['trial 1: threat-corridor: unknown parameter "colour".']);
+    expect(checkStudy(study(['t.wad'], trial({ min_delay_s: 4, max_delay_s: 3 })), schema, corridor)).toEqual([
+      'trial 1: threat-corridor: min_delay_s must not be larger than max_delay_s.',
+    ]);
+    expect(checkStudy(study(['t.wad'], trial({}, -1)), schema, corridor)).toEqual(['config.blocks[0].trials[0].seed must be at least 0']);
+    expect(checkStudy(study([], { map: 1, time_limit: 60, seed: 3 }), schema, corridor)).toEqual(['trial 1: classic trials use no seed; remove "seed"']);
+  });
+
+  it('encodes the threat-corridor params for the engine', () => {
+    const paradigm = PARADIGMS.find((p) => p.id === 'threat-corridor')!;
+    expect(paradigm.engineParams(resolveParadigmParams(paradigm, { min_delay_s: 1.5, monster: 'demon', attack: true }))).toEqual([10, 53, 175, 3, 1, 1]);
+  });
+
+  it('encodes the two-door-bandit params for the engine', () => {
+    const paradigm = PARADIGMS.find((p) => p.id === 'two-door-bandit')!;
+    expect(paradigm.engineParams(resolveParadigmParams(paradigm, { choices: 30, reversals: [10, 20] }))).toEqual([
+      30, 0, 45875, 19661, 1638, 16384, 49152, 35, 1, 10, 20, 0, 0, 0, 0, 0,
+    ]);
+    expect(paradigm.engineParams(resolveParadigmParams(paradigm, { schedule: 'drifting', p_left: 0.5, p_right: 0.5, feedback_s: 0, show_score: false }))
+      .slice(0, 9)).toEqual([40, 1, 32768, 32768, 1638, 16384, 49152, 0, 0]);
+  });
+
+  it('checks the two-door-bandit params', () => {
+    const paradigm = PARADIGMS.find((p) => p.id === 'two-door-bandit')!;
+    const problems = (given: Record<string, unknown>) => {
+      try {
+        resolveParadigmParams(paradigm, given);
+        return '';
+      } catch (error) {
+        return (error as Error).message;
+      }
+    };
+    expect(problems({ reversals: [5, 10, 15, 20, 25, 30, 35] })).toBe('');
+    expect(problems({ reversals: [1, 2, 3, 4, 5, 6, 7, 8] })).toMatch(/at most 7/);
+    expect(problems({ reversals: [10, 10] })).toMatch(/ascending/);
+    expect(problems({ reversals: [40] })).toMatch(/ascending/);
+    expect(problems({ schedule: 'drifting', reversals: [3], p_left: 0.5, p_right: 0.5 })).toMatch(/fixed schedule only/);
+    expect(problems({ schedule: 'drifting' })).toBe('');
+    expect(problems({ schedule: 'drifting', drift_min: 0.4 })).toMatch(/p_right must lie between/);
+    expect(problems({ schedule: 'drifting', drift_min: 0.8, drift_max: 0.2 })).toMatch(/drift_min must be smaller/);
+  });
+
+  it('has a start and two doors on every two-door-bandit map', () => {
+    const wad = manifest.wads['two-door-bandit.wad'];
+    expect(wad.maps.length).toBeGreaterThan(0);
+    for (const map of wad.maps) expect(map).toMatchObject({ paradigm: 'two-door-bandit', rois: { 900: 'start', 901: 'left', 902: 'right' } });
   });
 });
 

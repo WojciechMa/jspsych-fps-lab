@@ -11,6 +11,15 @@ const TICS_PER_SECOND = 35;
 
 const LEFT_BUTTON = 1;
 
+/** Size of the engine's mode parameter array (DG_MODE_PARAMS in engine/web/dg_mode.h). */
+export const MODE_PARAMS = 16;
+
+export interface WadFile {
+  /** File name, e.g. freedoom2.wad. */
+  name: string;
+  data: Uint8Array<ArrayBuffer>;
+}
+
 export interface TrialOptions {
   /** MAPxx number. */
   map: number;
@@ -24,6 +33,10 @@ export interface TrialOptions {
   hud: boolean;
   /** Tab opens the automap. */
   automap: boolean;
+  /** Paradigm mode (0 = unmodified Doom), its integer params and the seed of its PRNG (uint32). */
+  mode: number;
+  modeParams: readonly number[];
+  seed: number;
 }
 
 interface ActiveTrial {
@@ -70,7 +83,8 @@ export class DoomEngine {
     this.context = context;
   }
 
-  static async create(iwad: { name: string; data: Uint8Array<ArrayBuffer> }): Promise<DoomEngine> {
+  /** `pwads` load after the IWAD in order; a later WAD's maps replace earlier ones in the same slot. */
+  static async create(iwad: WadFile, pwads: readonly WadFile[] = []): Promise<DoomEngine> {
     const engine = new DoomEngine();
     const response = await fetch(wasmUrl);
     if (!response.ok) throw new Error(`${wasmUrl}: HTTP ${response.status}`);
@@ -92,19 +106,20 @@ export class DoomEngine {
       },
     });
 
+    const wads = [iwad, ...pwads];
     engine.info = {
       app_version: __APP_VERSION__,
       wasm_sha256: await sha256(wasm),
       commit: __GIT_COMMIT__,
-      wads: [{ name: iwad.name, bytes: iwad.data.length, sha256: await sha256(iwad.data) }],
+      wads: await Promise.all(wads.map(async (wad) => ({ name: wad.name, bytes: wad.data.length, sha256: await sha256(wad.data) }))),
     };
 
-    const iwadPath = `/${iwad.name}`;
-    engine.module.FS.writeFile(iwadPath, iwad.data);
+    for (const wad of wads) engine.module.FS.writeFile(`/${wad.name}`, wad.data);
+    const files = pwads.length ? ['-file', ...pwads.map((wad) => `/${wad.name}`)] : [];
     // Boots into MAP01 and idles until a trial starts; -longtics keeps full-precision turning.
     // doomgeneric's zone defaults to 6 MiB; -mb 32 leaves headroom for full IWADs (Freedoom).
     const status = engine.module.callMain([
-      '-iwad', iwadPath, '-gfxmode', 'canvas', '-nogui', '-longtics', '-mb', '32',
+      '-iwad', `/${iwad.name}`, ...files, '-gfxmode', 'canvas', '-nogui', '-longtics', '-mb', '32',
       '-warp', '1', '-skill', '3',
     ]);
     if (status !== 0) throw new Error(engine.errorText(`engine exited with status ${status}`));
@@ -152,7 +167,9 @@ export class DoomEngine {
     const ticLimit = options.timeLimit ? Math.round(options.timeLimit * TICS_PER_SECOND) : 0;
     const flags = (options.noMonsters ? 1 : 0) | (options.hud ? 0 : 8);
     this.automapKey = options.automap;
-    this.module._dg_start_trial(options.map, options.skill - 1, flags, ticLimit);
+    if (options.modeParams.length > MODE_PARAMS) throw new Error(`At most ${MODE_PARAMS} mode params.`);
+    for (let i = 0; i < MODE_PARAMS; i++) this.module._dg_set_param(i, options.modeParams[i] ?? 0);
+    this.module._dg_start_trial(options.map, options.skill - 1, flags, ticLimit, options.mode, options.seed >>> 0);
     this.frameTimes.clear();
     this.run();
   }

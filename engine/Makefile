@@ -15,7 +15,7 @@ DOOM := dummy am_map doomdef doomstat dstrings d_event d_items d_iwad d_loop d_m
 	r_main r_plane r_segs r_sky r_things sha1 sounds statdump st_lib st_stuff \
 	s_sound tables v_video wi_stuff w_checksum w_file w_main w_wad z_zone \
 	w_file_stdc i_input i_video doomgeneric
-WEB := doomgeneric_web dg_trial dg_sound
+WEB := doomgeneric_web dg_trial dg_mode dg_sound
 
 OBJS := $(DOOM:%=$(OBJ)/%.o) $(WEB:%=$(OBJ)/%.o)
 
@@ -26,8 +26,8 @@ VENDOR_CFLAGS := -O2 $(DEFINES) -MMD -MP -w -Iweb \
 	-Wno-error=incompatible-function-pointer-types
 WEB_CFLAGS := -O2 $(DEFINES) -MMD -MP -Wall -I$(SRC)
 
-EXPORTS := main dg_tick dg_key dg_mouse_move dg_mouse_buttons dg_start_trial dg_abort_trial \
-	dg_stream_data dg_stream_take dg_stream_dropped dg_demo_data dg_demo_length
+EXPORTS := main dg_tick dg_key dg_mouse_move dg_mouse_buttons dg_start_trial dg_set_param \
+	dg_abort_trial dg_stream_data dg_stream_take dg_stream_dropped dg_demo_data dg_demo_length
 empty :=
 space := $(empty) $(empty)
 comma := ,

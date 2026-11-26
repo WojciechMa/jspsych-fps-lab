@@ -8,7 +8,8 @@ declare module 'doom-engine-build/doom-engine.mjs' {
     _dg_key(pressed: number, key: number): void;
     _dg_mouse_move(dx: number): void;
     _dg_mouse_buttons(buttons: number): void;
-    _dg_start_trial(map: number, skill: number, flags: number, tics: number): void;
+    _dg_start_trial(map: number, skill: number, flags: number, tics: number, mode: number, seed: number): void;
+    _dg_set_param(index: number, value: number): void;
     _dg_abort_trial(): void;
     /** Pointers are byte offsets into HEAPU8. */
     _dg_stream_data(): number;

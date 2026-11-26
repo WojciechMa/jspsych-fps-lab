@@ -1,0 +1,36 @@
+{
+  "$schema": "./schema.json",
+  "title": "Threat corridor demo",
+  "consent_html": "<p>This is a demo of the threat-corridor paradigm of jspsych-fps-lab. You stand in a corridor; monsters appear one at a time in alcoves ahead of, beside or behind you. Shoot each one as quickly as you can. In this demo the monsters don't fight back.</p>",
+  "instructions_html": "<h1>How to play</h1><p>W A S D move, the mouse turns and left click fires. Esc pauses the game.</p><p>Each round, monsters appear one at a time in the alcoves of the corridor, with a flash and a sound. Turn to them and shoot. A round ends when the last monster is down or when its time is up.</p>",
+  "wads": ["threat-corridor.wad"],
+  "save": { "target": "download" },
+  "blocks": [
+    {
+      "name": "practice",
+      "practice": true,
+      "trials": [
+        { "paradigm": "threat-corridor", "map": 10, "skill": 3, "time_limit": 60, "params": { "threats": 3 }, "seed": 1 }
+      ]
+    },
+    {
+      "name": "test",
+      "trials": [
+        { "paradigm": "threat-corridor", "map": 11, "skill": 3, "time_limit": 180, "params": { "threats": 12 } },
+        { "paradigm": "threat-corridor", "map": 11, "skill": 3, "time_limit": 180, "params": { "threats": 12, "monster": "imp" } }
+      ]
+    }
+  ],
+  "questionnaires": [
+    {
+      "type": "likert",
+      "questions": [
+        {
+          "name": "startle",
+          "prompt": "How startling were the monsters' appearances?",
+          "labels": ["Not at all", "Slightly", "Moderately", "Very", "Extremely"]
+        }
+      ]
+    }
+  ]
+}

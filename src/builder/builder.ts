@@ -2,6 +2,8 @@
 // page, preview what participants see and the data size, and export the JSON to commit.
 import { MEASURES, resolveParams } from '../measures/registry';
 import type { ParamSchema } from '../measures/types';
+import { IWAD, mapLabel, type StudyMap, studyMaps, type WadManifest } from '../paradigms/manifest';
+import { getParadigm, PARADIGMS } from '../paradigms/registry';
 import { CONSENT_TEXT } from '../save/targets';
 import {
   checkStudy,
@@ -15,10 +17,22 @@ import {
   STUDY_ID,
   type SaveTargetId,
   type StudyConfig,
+  type TrialConfig,
+  trialParadigm,
 } from '../study/config';
 import { consentHtml, escapeHtml, warningHtml } from '../study/pages';
 import { checkSchema, type Schema } from '../study/schema-check';
-import { blankDraft, defaultMeasures, type Draft, fromConfig, newQuestion, newTrial, toConfig } from './draft';
+import {
+  blankDraft,
+  defaultMeasures,
+  type Draft,
+  fromConfig,
+  isParadigmDefault,
+  measureSpecs,
+  newQuestion,
+  newTrial,
+  toConfig,
+} from './draft';
 import './builder.css';
 
 const STORAGE_KEY = 'jspsych-fps-lab-builder-draft';
@@ -36,8 +50,16 @@ function el<K extends keyof HTMLElementTagNameMap>(
 }
 
 let schema: Schema;
+let manifest: WadManifest;
 let draft: Draft = restoreDraft();
 let loadNote: string | null = null;
+
+/** Maps that the given WADs put into MAPxx slots (unknown WADs are skipped). */
+function mapsOf(wads: readonly string[] | undefined): Map<number, StudyMap> {
+  return studyMaps((wads ?? []).filter((wad) => Object.hasOwn(manifest.wads, wad)), manifest).maps;
+}
+
+const defaultPrompt = (trial: TrialConfig): string => `${trialParadigm(trial).participantInstructions}<p>Click to start.</p>`;
 
 function restoreDraft(): Draft {
   try {
@@ -183,7 +205,25 @@ function studySection(): HTMLElement {
     el('label', {}, checkbox(draft.fullscreen, (v) => (draft.fullscreen = v)), ' Full screen (recommended): asked before the instructions; leaving it pauses the game'),
     field('URL parameters to store', textInput(draft.url_params, (v) => (draft.url_params = v), { placeholder: 'e.g. participant, session' }), 'Names of query parameters (e.g. a participant code from the recruitment platform) stored with the data.'),
     field('Completion URL', textInput(draft.completion_url, (v) => (draft.completion_url = v), { placeholder: 'https://…' }), 'Optional: where participants go after finishing, e.g. back to the recruitment platform.'),
-    el('p', { className: 'help', textContent: 'Game data: Freedoom Phase 2. Status-bar face: Freedoom\'s. Paradigm: classic Doom. More choices come with M4.' }),
+    el(
+      'div',
+      { className: 'field' },
+      el('span', { textContent: 'Map WADs' }),
+      ...Object.entries(manifest.wads).map(([wad, entry]) =>
+        el(
+          'label',
+          {},
+          checkbox(draft.wads.includes(wad), (on) => {
+            draft.wads = on ? [...draft.wads, wad] : draft.wads.filter((w) => w !== wad);
+            renderForm();
+          }),
+          ` ${wad}: `,
+          el('small', { textContent: entry.maps.map((m) => `${mapLabel(m.slot)} ${m.name} (${m.paradigm})`).join(', ') }),
+        ),
+      ),
+      el('small', { textContent: 'Their maps replace the IWAD\'s levels in the same MAPxx slots. Built from maps/*.json with npm run build:maps.' }),
+    ),
+    el('p', { className: 'help', textContent: 'Game data: Freedoom Phase 2. Status-bar face: Freedoom\'s.' }),
   );
 }
 
@@ -227,7 +267,7 @@ function measuresSection(): HTMLElement {
     'fieldset',
     {},
     el('legend', { textContent: 'Measures (all trials)' }),
-    el('p', { className: 'help', textContent: 'Only the ticked measures are recorded, and the consent page lists exactly these.' }),
+    el('p', { className: 'help', textContent: 'Only the ticked measures are recorded, and the consent page lists exactly these. While they are a paradigm\'s defaults, switching all trials to another paradigm switches to its defaults.' }),
   );
   for (const measure of MEASURES) {
     const choice = draft.measures[measure.id];
@@ -251,9 +291,85 @@ function measuresSection(): HTMLElement {
   return section;
 }
 
+/** Map choices for a trial: the paradigm's own maps from the study's WADs, or the IWAD's levels. */
+function mapOptions(trial: TrialConfig): [string, string][] {
+  const paradigm = trialParadigm(trial);
+  const maps = mapsOf(draft.wads);
+  const options: [string, string][] =
+    paradigm.maps === 'pwad'
+      ? [...maps.values()]
+          .filter((m) => m.paradigm === paradigm.id)
+          .sort((a, b) => a.slot - b.slot)
+          .map((m) => [String(m.slot), `${mapLabel(m.slot)} ${m.name}`])
+      : IWAD.maps.map((slot) => {
+          const map = maps.get(slot);
+          return [String(slot), map ? `${mapLabel(slot)} (${map.name})` : mapLabel(slot)];
+        });
+  if (!options.some(([value]) => value === String(trial.map))) options.unshift([String(trial.map), `${mapLabel(trial.map)} (not available)`]);
+  return options;
+}
+
+/** Switches a trial's paradigm, adding a WAD with its maps and its default measures where needed. */
+function setParadigm(trial: TrialConfig, id: string): void {
+  const before = trialParadigm(trial);
+  const paradigm = getParadigm(id);
+  trial.paradigm = id;
+  // Params and seed belong to the paradigm.
+  delete trial.params;
+  if (paradigm.mode === 0) delete trial.seed;
+  if (paradigm.maps === 'pwad') {
+    const own = () => [...mapsOf(draft.wads).values()].filter((m) => m.paradigm === id);
+    if (!own().length) {
+      const wad = Object.entries(manifest.wads).find(([, entry]) => entry.maps.some((m) => m.paradigm === id))?.[0];
+      if (wad) draft.wads = [...draft.wads, wad];
+    }
+    const first = own().sort((a, b) => a.slot - b.slot)[0];
+    if (first && !own().some((m) => m.slot === trial.map)) trial.map = first.slot;
+  }
+  const trials = draft.blocks.flatMap((block) => block.trials);
+  if (isParadigmDefault(measureSpecs(draft), before) && trials.every((t) => trialParadigm(t).id === id)) {
+    draft.measures = defaultMeasures(paradigm.defaultMeasures);
+  }
+}
+
+/** The paradigm's params and seed of one trial, folded; "none" for paradigms without them. */
+function paradigmParams(trial: TrialConfig): HTMLElement {
+  const paradigm = trialParadigm(trial);
+  const schemas = Object.entries(paradigm.paramsSchema.properties);
+  if (paradigm.mode === 0 && !schemas.length) return el('small', { textContent: 'none' });
+  const defaults = resolveParams(paradigm);
+  const params = el('div', { className: 'params' });
+  for (const [name, schema] of schemas) {
+    params.append(
+      el('span', { textContent: name, title: schema.description }),
+      el(
+        'span',
+        {},
+        paramInput(schema, trial.params?.[name] ?? defaults[name], (value) => (trial.params = { ...trial.params, [name]: value })),
+        el('small', { textContent: ` ${schema.description}` }),
+      ),
+    );
+  }
+  if (paradigm.mode !== 0) {
+    params.append(
+      el('span', { textContent: 'seed' }),
+      el(
+        'span',
+        {},
+        textInput(trial.seed === undefined ? '' : String(trial.seed), (v) => (trial.seed = v.trim() === '' ? undefined : Number(v)), {
+          placeholder: 'random',
+          inputMode: 'numeric',
+        }),
+        el('small', { textContent: ' 0–4294967295. Same seed, same sequence. Empty: drawn per participant and trial, and recorded.' }),
+      ),
+    );
+  }
+  return el('details', {}, el('summary', { textContent: 'Parameters' }), params);
+}
+
 function blocksSection(): HTMLElement {
   const section = el('fieldset', {}, el('legend', { textContent: 'Blocks and trials' }));
-  const maps: [string, string][] = Array.from({ length: 32 }, (_, i) => [String(i + 1), `MAP${String(i + 1).padStart(2, '0')}`]);
+  const paradigms: [string, string][] = PARADIGMS.map((p) => [p.id, p.label]);
   const skills: [string, string][] = [1, 2, 3, 4, 5].map((n) => [String(n), n === 3 ? '3 (default)' : String(n)]);
   draft.blocks.forEach((block, b) => {
     const rows = block.trials.map((trial, t) =>
@@ -261,14 +377,16 @@ function blocksSection(): HTMLElement {
         'tr',
         {},
         el('td', { textContent: String(t + 1) }),
-        el('td', {}, select(maps, String(trial.map), (v) => (trial.map = Number(v)))),
+        el('td', {}, select(paradigms, trialParadigm(trial).id, (v) => setParadigm(trial, v), true)),
+        el('td', {}, paradigmParams(trial)),
+        el('td', {}, select(mapOptions(trial), String(trial.map), (v) => (trial.map = Number(v)))),
         el('td', {}, select(skills, String(trial.skill ?? 3), (v) => (trial.skill = Number(v)))),
         el('td', {}, numberInput(trial.time_limit, (v) => (trial.time_limit = v), { min: '1', max: '900', step: '1' })),
         el('td', {}, checkbox(trial.no_monsters ?? false, (v) => (trial.no_monsters = v))),
         el('td', {}, checkbox(trial.sound ?? true, (v) => (trial.sound = v))),
         el('td', {}, checkbox(trial.hud ?? true, (v) => (trial.hud = v))),
         el('td', {}, checkbox(trial.automap ?? false, (v) => (trial.automap = v))),
-        el('td', {}, textInput(trial.prompt_html ?? '', (v) => (trial.prompt_html = v), { placeholder: 'Click to start.' })),
+        el('td', {}, textInput(trial.prompt_html ?? '', (v) => (trial.prompt_html = v), { placeholder: defaultPrompt(trial) })),
         el(
           'td',
           { className: 'row' },
@@ -277,7 +395,7 @@ function blocksSection(): HTMLElement {
         ),
       ),
     );
-    const header = ['#', 'Map', 'Skill', 'Time limit (s)', 'No monsters', 'Sound', 'Status bar', 'Automap (Tab)', 'Prompt (HTML)', ''];
+    const header = ['#', 'Paradigm', 'Paradigm settings', 'Map', 'Skill', 'Time limit (s)', 'No monsters', 'Sound', 'Status bar', 'Automap (Tab)', 'Prompt (HTML)', ''];
     section.append(
       el(
         'div',
@@ -397,6 +515,7 @@ function megabytes(bytes: number): string {
 
 function renderSize(config: StudyConfig): void {
   const { perTrialMeasure, total } = estimateBytes(config);
+  const maps = mapsOf(config.wads);
   let index = 0;
   const rows = config.blocks.flatMap((block, b) =>
     block.trials.map((trial, t) => {
@@ -404,7 +523,7 @@ function renderSize(config: StudyConfig): void {
       return el(
         'tr',
         {},
-        ...[`${b + 1}`, `${t + 1}`, `MAP${String(trial.map).padStart(2, '0')}`, `${trial.time_limit} s`, megabytes(bytes)].map((text) => el('td', { textContent: text })),
+        ...[`${b + 1}`, `${t + 1}`, maps.get(trial.map)?.name ?? mapLabel(trial.map), `${trial.time_limit} s`, megabytes(bytes)].map((text) => el('td', { textContent: text })),
       );
     }),
   );
@@ -446,10 +565,15 @@ function renderPages(config: StudyConfig): void {
   const page = (label: string, html: string, buttons: string[]) =>
     `<section><div class="label">${escapeHtml(label)}</div>${html}<p class="buttons">${buttons.map((b) => `<span>${escapeHtml(b)}</span>`).join('')}</p></section>`;
   const consentText = CONSENT_TEXT[config.save.target] ?? '(DataPipe is not implemented yet: no text.)';
+  const maps = mapsOf(config.wads);
   const blocks = config.blocks.flatMap((block, b) => [
     ...(block.instructions_html ? [page(`Before block ${b + 1}`, block.instructions_html, ['Continue'])] : []),
     ...block.trials.map((trial, t) =>
-      page(`${block.practice ? 'Practice b' : 'B'}lock ${b + 1}, trial ${t + 1}: MAP${String(trial.map).padStart(2, '0')}, up to ${trial.time_limit} s`, `<p>${trial.prompt_html ?? 'Click to start.'}</p>`, []),
+      page(
+        `${block.practice ? 'Practice b' : 'B'}lock ${b + 1}, trial ${t + 1}: ${trialParadigm(trial).label}, ${maps.get(trial.map)?.name ?? mapLabel(trial.map)}, up to ${trial.time_limit} s`,
+        trial.prompt_html ?? defaultPrompt(trial),
+        [],
+      ),
     ),
   ]);
   const questionnaires = (config.questionnaires ?? []).map((q, p) => page(`Questionnaire page ${p + 1}`, questionnairePreview(q), ['Continue']));
@@ -473,7 +597,7 @@ function update(): void {
   const problems = [
     ...(STUDY_ID.test(draft.id) ? [] : ['Study id: use only a-z, 0-9 and -.']),
     ...(Object.values(draft.measures).some((choice) => choice.on) ? [] : ['Tick at least one measure.']),
-    ...checkStudy(config, schema),
+    ...checkStudy(config, schema, manifest),
   ];
   problemsEl.replaceChildren(
     problems.length
@@ -576,6 +700,7 @@ function header(): HTMLElement {
 
 async function start(): Promise<void> {
   schema = (await fetchJson('studies/schema.json')) as Schema;
+  manifest = (await fetchJson('wads/manifest.json')) as WadManifest;
   document.body.append(
     header(),
     el(

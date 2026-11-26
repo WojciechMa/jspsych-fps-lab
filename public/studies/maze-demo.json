@@ -1,0 +1,34 @@
+{
+  "$schema": "./schema.json",
+  "title": "Maze demo",
+  "consent_html": "<p>This is a demo of the maze paradigm of jspsych-fps-lab: a practice maze and two larger mazes, with no monsters. Find the way out of each; a round ends at the exit or when its time is up.</p>",
+  "instructions_html": "<h1>How to play</h1><p>W A S D move and the mouse turns. Esc pauses the game.</p><p>Each round is a maze. Find the exit: a room whose walls and floor look different. Walking into it ends the round; so does running out of time.</p>",
+  "wads": ["maze.wad"],
+  "save": { "target": "download" },
+  "blocks": [
+    {
+      "name": "practice",
+      "practice": true,
+      "trials": [{ "paradigm": "maze", "map": 1, "skill": 3, "time_limit": 120 }]
+    },
+    {
+      "name": "test",
+      "trials": [
+        { "paradigm": "maze", "map": 2, "skill": 3, "time_limit": 180 },
+        { "paradigm": "maze", "map": 4, "skill": 3, "time_limit": 300 }
+      ]
+    }
+  ],
+  "questionnaires": [
+    {
+      "type": "likert",
+      "questions": [
+        {
+          "name": "difficulty",
+          "prompt": "How hard was it to find your way?",
+          "labels": ["Very easy", "Easy", "Neither", "Hard", "Very hard"]
+        }
+      ]
+    }
+  ]
+}

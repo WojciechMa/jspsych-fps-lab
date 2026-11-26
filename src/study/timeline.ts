@@ -11,6 +11,7 @@ import SurveyTextPlugin from '@jspsych/plugin-survey-text';
 import type { JsPsych } from 'jspsych';
 import DoomTrialPlugin from '../plugins/plugin-doom-trial';
 import SaveStepPlugin from '../plugins/plugin-save-step';
+import { mapLabel, studyMaps, type WadManifest } from '../paradigms/manifest';
 import type { SaveTarget } from '../save/targets';
 import {
   DEFAULT_INSTRUCTIONS_HTML,
@@ -18,6 +19,7 @@ import {
   type QuestionnaireConfig,
   type StudyConfig,
   trialMeasures,
+  trialParadigm,
 } from './config';
 import { consentHtml, escapeHtml, warningHtml } from './pages';
 
@@ -54,10 +56,12 @@ function questionnaireTrial(page: QuestionnaireConfig) {
 export function buildTimeline(
   jsPsych: JsPsych,
   config: StudyConfig,
+  manifest: WadManifest,
   target: SaveTarget,
   fileName: () => string,
 ): { timeline: Timeline; session: Session } {
   const session: Session = { ended: null };
+  const { maps } = studyMaps(config.wads ?? [], manifest);
   let sent = 0;
   // Sends records one by one, so a retry after a failure doesn't send any record twice.
   const sendNew = async (): Promise<void> => {
@@ -121,7 +125,11 @@ export function buildTimeline(
       ...block.trials.flatMap((trial) => [
         {
           type: DoomTrialPlugin,
+          paradigm: trialParadigm(trial).id,
+          params: trial.params ?? null,
+          seed: trial.seed ?? null,
           map: trial.map,
+          map_name: maps.get(trial.map)?.name ?? null,
           skill: trial.skill ?? 3,
           time_limit: trial.time_limit,
           no_monsters: trial.no_monsters ?? false,
@@ -130,7 +138,7 @@ export function buildTimeline(
           automap: trial.automap ?? false,
           fullscreen,
           measures: trialMeasures(trial),
-          ...(trial.prompt_html ? { prompt: trial.prompt_html } : {}),
+          prompt: trial.prompt_html ?? `${trialParadigm(trial).participantInstructions}<p>Click to start.</p>`,
           data: { block: b, block_name: block.name ?? null, practice: block.practice ?? false },
         },
         saveStep,
@@ -145,7 +153,7 @@ export function buildTimeline(
       .map((t, i) => {
         const seconds = t.duration_tics ? Math.round(t.duration_tics / 35) : 0;
         const kb = Math.ceil(JSON.stringify(t).length / 1000);
-        return `<tr><td>${i + 1}</td><td>MAP${String(t.map).padStart(2, '0')}</td><td>${escapeHtml(String(t.end_reason))}</td><td>${seconds} s</td><td>${kb} kB</td></tr>`;
+        return `<tr><td>${i + 1}</td><td>${escapeHtml(t.map_name ?? mapLabel(t.map))}</td><td>${escapeHtml(String(t.end_reason))}</td><td>${seconds} s</td><td>${kb} kB</td></tr>`;
       })
       .join('');
     return `

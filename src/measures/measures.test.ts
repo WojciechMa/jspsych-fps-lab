@@ -79,6 +79,38 @@ describe('roi', () => {
   });
 });
 
+describe('bandit', () => {
+  it('records choices with their times, and win-stay / lose-shift', () => {
+    const runner = startRunner(['bandit']);
+    const choice = (tic: number, index: number, door: 'left' | 'right', reward: boolean, pLeft = 0.7, pRight = 0.3) =>
+      runner.onEvent(ev({ tic, type: 'choice', index, door, reward, pLeft, pRight }));
+    choice(40, 1, 'left', true);
+    runner.onEvent(ev({ tic: 75, type: 'return', index: 2 }));
+    choice(105, 2, 'left', false, 0.3, 0.7);
+    runner.onEvent(ev({ tic: 140, type: 'return', index: 3 }));
+    choice(160, 3, 'right', false, 0.3, 0.7);
+    runner.onEvent(ev({ tic: 195, type: 'return', index: 4 }));
+    choice(225, 4, 'right', true, 0.123456, 0.123456);
+    const { summary, raw } = resultOf(runner, 'bandit', 260);
+    expect(summary).toEqual({
+      choices: 4, rewards: 2, left_share: 0.5, better_share: 0.6667, switches: 1,
+      win_stay: 1, lose_shift: 0.5, median_choice_tics: 30,
+    });
+    expect(raw).toMatchObject({
+      start_tic: [0, 75, 140, 195],
+      choice_tics: [40, 30, 20, 30],
+      door: ['left', 'left', 'right', 'right'],
+      better: [true, false, true, null],
+      p_left: [0.7, 0.3, 0.3, 0.1235],
+    });
+  });
+
+  it('has no rates without choices', () => {
+    const { summary } = resultOf(startRunner(['bandit']), 'bandit', 10);
+    expect(summary).toMatchObject({ choices: 0, left_share: null, win_stay: null, median_choice_tics: null });
+  });
+});
+
 describe('threat_rt', () => {
   it('times turning toward, shooting and hitting a monster from its first visible frame', () => {
     const runner = startRunner(['threat_rt']);
@@ -136,6 +168,18 @@ describe('threat_rt', () => {
     runner.onTic(tic(4, { timeMs: 9010 }));
     const { raw } = resultOf(runner, 'threat_rt', 5);
     expect(raw).toMatchObject({ shot_tic: [4], rt_shot_tics: [3], rt_shot_ms: [null] });
+  });
+
+  it('links sightings to mode spawns and counts spawns never seen', () => {
+    const runner = startRunner(['threat_rt']);
+    runner.onEvent(ev({ tic: 0, type: 'spawn', index: 1, id: 8, spot: 2, thingType: 1 }));
+    runner.onEvent(ev({ tic: 0, type: 'spawn', index: 2, id: 9, spot: 0, thingType: 1 }));
+    runner.onTic(tic(0));
+    runner.onFrame(frame(1, 1, [{ id: 8, x: 100, y: 100 }, { id: 10, x: 100, y: 0 }]));
+    runner.onTic(tic(1));
+    const { summary, raw } = resultOf(runner, 'threat_rt', 2);
+    expect(raw).toMatchObject({ id: [8, 10], spawn_tic: [0, null], spawn_spot: [2, null] });
+    expect(summary).toMatchObject({ monsters_seen: 2, spawned: 2, spawned_unseen: 1 });
   });
 });
 

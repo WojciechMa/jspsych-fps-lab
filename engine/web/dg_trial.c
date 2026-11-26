@@ -17,6 +17,7 @@
 #include "z_zone.h"
 
 #include "dg_hooks.h"
+#include "dg_mode.h"
 
 #define DEMOMARKER 0x80
 #define STREAM_WORDS (1 << 18)
@@ -31,9 +32,9 @@
 enum { REC_TIC = 1, REC_EVENT, REC_FRAME, REC_VISIBLE, REC_END, REC_START };
 enum {
     EV_DAMAGE = 1, EV_KILL, EV_PICKUP, EV_SHOT, EV_HIT, EV_USE, EV_CROSS, EV_SOUND,
-    EV_ROI_ENTER, EV_ROI_EXIT, EV_DEATH, EV_EXIT, EV_AUTOMAP
+    EV_ROI_ENTER, EV_ROI_EXIT, EV_DEATH, EV_EXIT, EV_AUTOMAP, EV_SPAWN, EV_CHOICE, EV_RETURN
 };
-enum { END_EXIT = 1, END_SECRET_EXIT, END_DEATH, END_TIMEOUT, END_ABORTED };
+enum { END_EXIT = 1, END_SECRET_EXIT, END_DEATH, END_TIMEOUT, END_ABORTED, END_COMPLETE };
 enum { TRIAL_IDLE, TRIAL_RUNNING, TRIAL_ENDED };
 
 // Demo state lives in g_game.c.
@@ -295,6 +296,21 @@ void DG_OnSound(void *origin, int sfx_id)
         Event(EV_SOUND, sfx_id, 1, IdOf(origin), 0, 0);
 }
 
+void DG_OnModeSpawn(mobj_t *mo, int index, int spot)
+{
+    Event(EV_SPAWN, index, IdOf(mo), spot, mo->type, 0);
+}
+
+void DG_OnModeChoice(int index, int door, int reward, int p_left, int p_right)
+{
+    Event(EV_CHOICE, index, door, reward, p_left, p_right);
+}
+
+void DG_OnModeReturn(int next_index)
+{
+    Event(EV_RETURN, next_index, 0, 0, 0, 0);
+}
+
 int DG_TicsSuspended(void)
 {
     return trial_state != TRIAL_RUNNING;
@@ -323,6 +339,8 @@ void DG_OnTicEnd(void)
     RecordTic();
     trial_tic++;
 
+    if (!pending_end && DG_ModeDone())
+        pending_end = END_COMPLETE;
     if (!pending_end && tic_limit > 0 && trial_tic >= tic_limit)
         pending_end = END_TIMEOUT;
 
@@ -371,8 +389,10 @@ void DG_OnSpriteDrawn(vissprite_t *vis, int pixels)
 
 // Starts `map` (MAPxx) from scratch: skill 0-4, flags 1 = no monsters, 2 = fast, 4 = respawn,
 // 8 = no HUD (full-height view without status bar, no messages).
-// tics = time limit in game tics, 0 for none.
-EMSCRIPTEN_KEEPALIVE void dg_start_trial(int map, int skill, int flags, int tics)
+// tics = time limit in game tics, 0 for none. mode = paradigm mode (dg_mode.c), with the params
+// set by dg_set_param and its PRNG seeded by seed.
+EMSCRIPTEN_KEEPALIVE void dg_start_trial(int map, int skill, int flags, int tics, int mode,
+                                         uint32_t seed)
 {
     int32_t *r;
 
@@ -399,6 +419,7 @@ EMSCRIPTEN_KEEPALIVE void dg_start_trial(int map, int skill, int flags, int tics
     // Same order as -record: allocate, load the level, then write the header.
     G_RecordDemo("trial");
     G_InitNew((skill_t) skill, 1, map);
+    DG_ModeStart(mode, seed);
     G_BeginRecording();
     trial_state = TRIAL_RUNNING;
 

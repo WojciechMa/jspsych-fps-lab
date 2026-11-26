@@ -1,6 +1,7 @@
 // The study builder's editable state and its conversion to and from a study config. The builder
 // gives all trials one set of measures; per-trial measures stay possible by editing the JSON.
-import { getMeasure, MEASURES, resolveParams, type MeasureSpec } from '../measures/registry';
+import { DEFAULT_MEASURES, getMeasure, MEASURES, resolveParams, type MeasureSpec } from '../measures/registry';
+import type { Paradigm } from '../paradigms/registry';
 import {
   allTrials,
   type BlockConfig,
@@ -10,6 +11,7 @@ import {
   type StudyConfig,
   type TrialConfig,
   trialMeasures,
+  trialParadigm,
 } from '../study/config';
 
 export interface MeasureChoice {
@@ -30,6 +32,8 @@ export interface Draft {
   target: SaveTargetId;
   datapipe_experiment_id: string;
   jatos: NonNullable<StudyConfig['jatos']>;
+  /** Map WADs from public/wads/manifest.json. */
+  wads: string[];
   measures: Record<string, MeasureChoice>;
   /** Trials without `measures`: those come from `Draft.measures`. */
   blocks: BlockConfig[];
@@ -48,8 +52,8 @@ export const newQuestion = (n: number): QuestionConfig => ({
   options: ['Yes', 'No'],
 });
 
-export function defaultMeasures(): Record<string, MeasureChoice> {
-  return Object.fromEntries(MEASURES.map((measure) => [measure.id, { on: true, params: resolveParams(measure) }]));
+export function defaultMeasures(ids: readonly string[] = DEFAULT_MEASURES): Record<string, MeasureChoice> {
+  return Object.fromEntries(MEASURES.map((measure) => [measure.id, { on: ids.includes(measure.id), params: resolveParams(measure) }]));
 }
 
 export function blankDraft(): Draft {
@@ -65,34 +69,41 @@ export function blankDraft(): Draft {
     target: 'download',
     datapipe_experiment_id: '',
     jatos: { study_uuid: '', component_uuid: '', batch_uuid: '' },
+    wads: [],
     measures: defaultMeasures(),
     blocks: [{ trials: [newTrial()] }],
     questionnaires: [],
   };
 }
 
-/** The trials' measure list; undefined when it equals the default (all measures, default parameters). */
-export function measureSpecs(draft: Draft): MeasureSpec[] | undefined {
+/** The ticked measures, with only the parameters that differ from their defaults. */
+export function measureSpecs(draft: Draft): MeasureSpec[] {
   const specs: MeasureSpec[] = [];
-  let allDefault = true;
   for (const measure of MEASURES) {
     const choice = draft.measures[measure.id];
-    if (!choice?.on) {
-      allDefault = false;
-      continue;
-    }
+    if (!choice?.on) continue;
     const defaults = resolveParams(measure);
     const changed = Object.entries(choice.params).filter(
       ([name, value]) => JSON.stringify(value) !== JSON.stringify(defaults[name]),
     );
-    if (changed.length) {
-      allDefault = false;
-      specs.push({ id: measure.id, params: Object.fromEntries(changed) });
-    } else {
-      specs.push(measure.id);
-    }
+    specs.push(changed.length ? { id: measure.id, params: Object.fromEntries(changed) } : measure.id);
   }
-  return allDefault ? undefined : specs;
+  return specs;
+}
+
+/** Whether specs are exactly the paradigm's default measures with default parameters. */
+export function isParadigmDefault(specs: readonly MeasureSpec[], paradigm: Paradigm): boolean {
+  const ids = specs.map((spec) => (typeof spec === 'string' ? spec : null));
+  return ids.length === paradigm.defaultMeasures.length && ids.every((id) => id !== null && paradigm.defaultMeasures.includes(id));
+}
+
+/** A trial's paradigm params that differ from the defaults (unknown ones kept, for the checks to report). */
+function changedParams(trial: TrialConfig): Record<string, unknown> | undefined {
+  const defaults = resolveParams(trialParadigm(trial));
+  const changed = Object.entries(trial.params ?? {}).filter(
+    ([name, value]) => JSON.stringify(value) !== JSON.stringify(defaults[name]),
+  );
+  return changed.length ? Object.fromEntries(changed) : undefined;
 }
 
 /** The config to commit: empty texts and default values left out, fields in schema order. */
@@ -108,6 +119,7 @@ export function toConfig(draft: Draft): ExportedConfig {
     consent_html: text(draft.consent_html),
     instructions_html: text(draft.instructions_html),
     fullscreen: draft.fullscreen ? undefined : false,
+    wads: draft.wads.length ? [...draft.wads] : undefined,
     url_params: urlParams.length ? urlParams : undefined,
     completion_url: text(draft.completion_url),
     save:
@@ -120,15 +132,18 @@ export function toConfig(draft: Draft): ExportedConfig {
       practice: block.practice || undefined,
       instructions_html: text(block.instructions_html ?? ''),
       trials: block.trials.map((trial) => ({
+        paradigm: trial.paradigm && trial.paradigm !== 'classic' ? trial.paradigm : undefined,
         map: trial.map,
         skill: trial.skill ?? 3,
         time_limit: trial.time_limit,
+        params: changedParams(trial),
+        seed: trial.seed,
         no_monsters: trial.no_monsters || undefined,
         sound: trial.sound === false ? false : undefined,
         hud: trial.hud === false ? false : undefined,
         automap: trial.automap || undefined,
         prompt_html: text(trial.prompt_html ?? ''),
-        measures,
+        measures: isParadigmDefault(measures, trialParadigm(trial)) ? undefined : measures,
       })),
     })),
     questionnaires: draft.questionnaires.length
@@ -182,6 +197,7 @@ export function fromConfig(config: StudyConfig, id: string): { draft: Draft; not
     target: config.save.target,
     datapipe_experiment_id: config.save.datapipe_experiment_id ?? '',
     jatos: config.jatos ? { ...config.jatos } : { study_uuid: '', component_uuid: '', batch_uuid: '' },
+    wads: [...(config.wads ?? [])],
     measures,
     blocks: config.blocks.map((block) => ({
       ...block,

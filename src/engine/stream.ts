@@ -12,7 +12,7 @@ const REC_START = 6;
 const TIC_WORDS = 26;
 const MONSTER_WORDS = 7;
 
-const END_REASONS: readonly (EndReason | null)[] = [null, 'exit', 'secret_exit', 'death', 'timeout', 'aborted'];
+const END_REASONS: readonly (EndReason | null)[] = [null, 'exit', 'secret_exit', 'death', 'timeout', 'aborted', 'complete'];
 const SOUND_ORIGINS = ['none', 'thing', 'sector'] as const;
 
 export interface StreamSink {
@@ -162,6 +162,12 @@ function decodeEvent(w: Int32Array, p: number): GameEvent {
       return { tic, type: 'exit', secret: a !== 0 };
     case 13:
       return { tic, type: 'automap', open: a !== 0 };
+    case 14:
+      return { tic, type: 'spawn', index: a, id: thingId(b), spot: c, thingType: d };
+    case 15:
+      return { tic, type: 'choice', index: a, door: b === 0 ? 'left' : 'right', reward: c !== 0, pLeft: d / 65536, pRight: e / 65536 };
+    case 16:
+      return { tic, type: 'return', index: a };
     default:
       return { tic, type: 'unknown', kind };
   }

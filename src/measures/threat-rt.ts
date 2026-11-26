@@ -29,17 +29,20 @@ interface Sighting {
   kill_tic: number | null;
   /** null while alive; false when another monster or a hazard killed it. */
   killed_by_player: boolean | null;
+  /** Tic and spot index when a paradigm mode spawned the monster; null for map monsters. */
+  spawn_tic: number | null;
+  spawn_spot: number | null;
 }
 
 const COLUMNS = [
   'id', 'type', 'frame', 'visible_tic', 'visible_ms', 'pixels', 'light', 'distance', 'offset_deg',
   'turning_toward_at_visible', 'turn_tic', 'shot_tic', 'hit_tic', 'kill_tic', 'killed_by_player',
-  'rt_turn_tics', 'rt_shot_tics', 'rt_hit_tics', 'rt_turn_ms', 'rt_shot_ms', 'rt_hit_ms',
+  'spawn_tic', 'spawn_spot', 'rt_turn_tics', 'rt_shot_tics', 'rt_hit_tics', 'rt_turn_ms', 'rt_shot_ms', 'rt_hit_ms',
 ] as const;
 
 export const threatRt: Measure<Params> = {
   id: 'threat_rt',
-  version: '1.1.0',
+  version: '1.2.0',
   label: 'Threat reaction time',
   participantDescription:
     'When monsters first appear on your screen, and how quickly you turn toward them, shoot, and hit them.',
@@ -67,6 +70,7 @@ export const threatRt: Measure<Params> = {
   },
   create(ctx, params) {
     const sightings = new Map<number, Sighting>();
+    const spawns = new Map<number, { tic: number; spot: number }>();
     const positions = new Map<number, { x: number; y: number }>();
     const ticTimes: number[] = [];
     // First tic not yet run at each pause.
@@ -109,11 +113,16 @@ export const threatRt: Measure<Params> = {
             hit_tic: null,
             kill_tic: null,
             killed_by_player: null,
+            spawn_tic: spawns.get(monster.id)?.tic ?? null,
+            spawn_spot: spawns.get(monster.id)?.spot ?? null,
           });
         }
       },
       onEvent(event) {
         switch (event.type) {
+          case 'spawn':
+            if (event.id !== null) spawns.set(event.id, { tic: event.tic, spot: event.spot });
+            break;
           case 'shot':
             if (byPlayer(event.shooter)) for (const s of sightings.values()) s.shot_tic ??= event.tic;
             break;
@@ -172,6 +181,8 @@ export const threatRt: Measure<Params> = {
             median_rt_turn_ms: medianOf('rt_turn_ms'),
             median_rt_shot_ms: medianOf('rt_shot_ms'),
             median_rt_hit_ms: medianOf('rt_hit_ms'),
+            spawned: spawns.size,
+            spawned_unseen: [...spawns.keys()].filter((id) => !sightings.has(id)).length,
           },
           raw: toColumns(rows, COLUMNS),
         };

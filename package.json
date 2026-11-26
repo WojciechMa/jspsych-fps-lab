@@ -15,6 +15,9 @@
     "test": "vitest run",
     "build:engine": "node scripts/build-engine.mjs",
     "build:miniwad": "node scripts/build-miniwad.mjs",
+    "build:maps": "node scripts/build-maps.mjs",
+    "fetch:freedoom": "node scripts/fetch-freedoom.mjs",
+    "build:iwad": "node scripts/build-iwad.mjs",
     "build:jatos": "npm run build && node scripts/build-jatos.mjs",
     "jatos:local": "node scripts/jatos-local.mjs"
   },

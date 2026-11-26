@@ -1,15 +1,23 @@
 // Study configs (public/studies/<id>.json): types, defaults, loading and the checks beyond the
-// JSON schema (measures and their parameters, data size against the save target's limits).
-import { DEFAULT_MEASURES, getMeasure, type MeasureSpec } from '../measures/registry';
+// JSON schema (paradigms and their maps, measures and their parameters, data size against the
+// save target's limits).
+import { getMeasure, type MeasureSpec } from '../measures/registry';
 import { MeasureRunner } from '../measures/runner';
+import { IWAD, mapLabel, studyMaps, type WadManifest } from '../paradigms/manifest';
+import { getParadigm, type Paradigm, resolveParadigmParams } from '../paradigms/registry';
 import { checkSchema, type Schema } from './schema-check';
 
 export type SaveTargetId = 'download' | 'jatos' | 'datapipe';
 
 export interface TrialConfig {
+  paradigm?: string;
   map: number;
   skill?: number;
   time_limit: number;
+  /** The paradigm's parameters; missing ones take their defaults. */
+  params?: Record<string, unknown>;
+  /** Seed (uint32) of the paradigm's randomness; left out = drawn per trial at run time. */
+  seed?: number;
   no_monsters?: boolean;
   sound?: boolean;
   hud?: boolean;
@@ -52,7 +60,8 @@ export interface StudyConfig {
   instructions_html?: string;
   devices?: 'desktop'[];
   fullscreen?: boolean;
-  iwad?: 'freedoom2.wad';
+  iwad?: 'freedoom2-lab.wad';
+  wads?: string[];
   face?: 'freedoom';
   url_params?: string[];
   completion_url?: string;
@@ -74,7 +83,8 @@ export const DEFAULT_INSTRUCTIONS_HTML = `
   <h1>How to play</h1>
   <p>W A S D move, the mouse turns, left click fires, E opens doors and presses switches, 1–7 switch
   weapons. Esc pauses the game.</p>
-  <p>Each round ends at the level's exit, if you die, or when its time is up.</p>`;
+  <p>Before each round you'll read what to do in it. A round ends when you reach its goal, if you
+  die, or when its time is up.</p>`;
 
 // JATOS defaults (jatos.resultData.maxSize, jatos.resultFiles.maxSize/studyMaxSize); DataPipe: per request.
 export const LIMITS = {
@@ -82,9 +92,13 @@ export const LIMITS = {
   datapipe: { request: 32e6 },
 } as const;
 
-/** Measure specs of a trial, with the default when the config lists none. */
+export function trialParadigm(trial: TrialConfig): Paradigm {
+  return getParadigm(trial.paradigm ?? 'classic');
+}
+
+/** Measure specs of a trial, with the paradigm's defaults when the config lists none. */
 export function trialMeasures(trial: TrialConfig): readonly MeasureSpec[] {
-  return trial.measures ?? DEFAULT_MEASURES;
+  return trial.measures ?? trialParadigm(trial).defaultMeasures;
 }
 
 export function allTrials(config: StudyConfig): TrialConfig[] {
@@ -145,17 +159,48 @@ export function estimateBytes(config: StudyConfig): { perTrialMeasure: number[][
   return { perTrialMeasure, total };
 }
 
+/** Each trial's map must suit its paradigm: IWAD levels for classic, the paradigm's own maps otherwise. */
+function checkMaps(config: StudyConfig, manifest: WadManifest): string[] {
+  const { maps, problems } = studyMaps(config.wads ?? [], manifest);
+  if (problems.length) return problems;
+  allTrials(config).forEach((trial, i) => {
+    const paradigm = trialParadigm(trial);
+    const map = maps.get(trial.map);
+    const label = mapLabel(trial.map);
+    if (paradigm.maps === 'iwad' && map) {
+      problems.push(`trial ${i + 1}: ${label} is "${map.name}" from ${map.wad}, a ${map.paradigm} map; set "paradigm": "${map.paradigm}"`);
+    }
+    if (paradigm.maps === 'iwad' && !map && !IWAD.maps.includes(trial.map)) {
+      problems.push(`trial ${i + 1}: ${label} is not in ${IWAD.name} (its levels: ${IWAD.maps.map(mapLabel).join(', ')})`);
+    }
+    if (paradigm.maps === 'pwad' && map?.paradigm !== paradigm.id) {
+      const options = [...maps.values()].filter((m) => m.paradigm === paradigm.id).map((m) => `${mapLabel(m.slot)} ${m.name}`);
+      problems.push(
+        `trial ${i + 1}: ${paradigm.id} trials need a ${paradigm.id} map from config.wads; ${label} isn't one ` +
+          `(available: ${options.join(', ') || 'none'})`,
+      );
+    }
+  });
+  return problems;
+}
+
 /** Schema check plus everything the schema can't express. Returns all problems found. */
-export function checkStudy(config: unknown, schema: Schema): string[] {
+export function checkStudy(config: unknown, schema: Schema, manifest: WadManifest): string[] {
   const problems = checkSchema(config, schema);
   if (problems.length) return problems;
   const study = config as StudyConfig;
   problems.push(...checkQuestionnaires(study));
+  problems.push(...checkMaps(study, manifest));
   allTrials(study).forEach((trial, i) => {
+    const paradigm = trialParadigm(trial);
     try {
+      resolveParadigmParams(paradigm, trial.params);
       new MeasureRunner(trialMeasures(trial));
     } catch (error) {
       problems.push(`trial ${i + 1}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (trial.seed !== undefined && paradigm.mode === 0) {
+      problems.push(`trial ${i + 1}: ${paradigm.id} trials use no seed; remove "seed"`);
     }
   });
   if (problems.length) return problems;
@@ -198,10 +243,14 @@ export async function fetchJson(path: string): Promise<unknown> {
 export async function loadStudy(
   id: string,
   fetchJson: (path: string) => Promise<unknown>,
-): Promise<StudyConfig> {
+): Promise<{ config: StudyConfig; manifest: WadManifest }> {
   if (!STUDY_ID.test(id)) throw new Error(`Invalid study id "${id}": use a-z, 0-9 and -.`);
-  const [config, schema] = await Promise.all([fetchJson(`studies/${id}.json`), fetchJson('studies/schema.json')]);
-  const problems = checkStudy(config, schema as Schema);
+  const [config, schema, manifest] = await Promise.all([
+    fetchJson(`studies/${id}.json`),
+    fetchJson('studies/schema.json'),
+    fetchJson('wads/manifest.json'),
+  ]);
+  const problems = checkStudy(config, schema as Schema, manifest as WadManifest);
   if (problems.length) throw new Error(`Study "${id}" is invalid:\n- ${problems.join('\n- ')}`);
-  return config as StudyConfig;
+  return { config: config as StudyConfig, manifest: manifest as WadManifest };
 }

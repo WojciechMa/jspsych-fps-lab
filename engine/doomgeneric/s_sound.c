@@ -606,6 +606,9 @@ void S_ChangeMusic(int musicnum, int looping)
     char namebuf[9];
     void *handle;
 
+    // jspsych-fps-lab: no music; the trimmed IWAD has no D_* lumps to look up.
+    return;
+
     // The Doom IWAD file has two versions of the intro music: d_intro
     // and d_introa.  The latter is used for OPL playback.
 

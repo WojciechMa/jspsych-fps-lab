@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { getParadigm } from '../paradigms/registry';
 import type { StudyConfig } from '../study/config';
-import { blankDraft, fromConfig, measureSpecs, newQuestion, toConfig } from './draft';
+import { blankDraft, defaultMeasures, fromConfig, measureSpecs, newQuestion, toConfig } from './draft';
 
 const studyFiles = import.meta.glob('../../public/studies/*.json', { eager: true, import: 'default' });
 
@@ -16,7 +17,6 @@ describe('builder draft', () => {
 
   it('leaves out default measures and writes only changed parameters', () => {
     const draft = blankDraft();
-    expect(measureSpecs(draft)).toBeUndefined();
     expect(toConfig(draft).blocks[0].trials[0]).toEqual({ map: 1, skill: 3, time_limit: 300 });
 
     draft.measures.demo.on = false;
@@ -24,6 +24,18 @@ describe('builder draft', () => {
     const specs = measureSpecs(draft);
     expect(specs).not.toContain('demo');
     expect(specs).toContainEqual({ id: 'aiming', params: { targetMaxOffsetDeg: 10 } });
+    expect(toConfig(draft).blocks[0].trials[0].measures).toEqual(specs);
+  });
+
+  it("compares the measures with each trial's paradigm defaults", () => {
+    const draft = blankDraft();
+    draft.wads = ['maze.wad'];
+    draft.blocks[0].trials = [{ paradigm: 'maze', map: 2, skill: 3, time_limit: 60 }, { paradigm: 'classic', map: 7, skill: 3, time_limit: 60 }];
+    draft.measures = defaultMeasures(getParadigm('maze').defaultMeasures);
+    const config = toConfig(draft);
+    expect(config.wads).toEqual(['maze.wad']);
+    expect(config.blocks[0].trials[0]).toEqual({ paradigm: 'maze', map: 2, skill: 3, time_limit: 60 });
+    expect(config.blocks[0].trials[1]).toEqual({ map: 7, skill: 3, time_limit: 60, measures: getParadigm('maze').defaultMeasures });
   });
 
   it('notes trials with different measures and keeps the first trial\'s', () => {

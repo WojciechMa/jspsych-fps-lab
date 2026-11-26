@@ -59,7 +59,14 @@ const study = {
   },
 };
 // Only what the production build loads plus Freedoom's licence; miniwad never ships.
-const WADS = ['freedoom2.wad.gz', 'freedoom-COPYING.txt', 'freedoom-CREDITS.txt'];
+const iwad = JSON.parse(readFileSync(resolve(root, 'src/paradigms/iwad.json'), 'utf8'));
+const WADS = [
+  `${config.iwad ?? iwad.name}.gz`,
+  'freedoom-COPYING.txt',
+  'freedoom-CREDITS.txt',
+  'manifest.json',
+  ...(config.wads ?? []),
+];
 const STUDIES = ['schema.json', `${studyId}.json`];
 
 function distFiles() {
@@ -121,7 +128,7 @@ const files = distFiles();
 if (!files.includes('index.html')) throw new Error('dist/index.html is missing: run npm run build first.');
 for (const name of WADS) {
   if (!files.includes(`wads/${name}`)) {
-    throw new Error(`dist/wads/${name} is missing: add Freedoom to public/wads as .github/actions/add-freedoom does, then rebuild.`);
+    throw new Error(`dist/wads/${name} is missing: run npm run fetch:freedoom && npm run build:iwad, then rebuild.`);
   }
 }
 for (const name of STUDIES) {

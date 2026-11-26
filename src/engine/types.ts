@@ -2,7 +2,8 @@
 // from east, times in ms on the performance.now() clock. Thing ids are stable within a trial;
 // null means "none".
 
-export type EndReason = 'exit' | 'secret_exit' | 'death' | 'timeout' | 'aborted';
+/** "complete": the paradigm's own goal was met (e.g. every threat of the threat corridor killed). */
+export type EndReason = 'exit' | 'secret_exit' | 'death' | 'timeout' | 'aborted' | 'complete';
 
 export interface MonsterState {
   id: number;
@@ -84,6 +85,15 @@ export type GameEvent = { tic: number } & (
   | { type: 'exit'; secret: boolean }
   /** The automap opened or closed; while it is open the 3D view (and monster visibility) is off. */
   | { type: 'automap'; open: boolean }
+  /** A paradigm mode spawned a monster: the `index`-th (from 1) at spawn spot `spot` (from 0). */
+  | { type: 'spawn'; index: number; id: Id; spot: number; thingType: number }
+  /**
+   * Bandit mode: choice `index` (from 1) of a door and whether it paid off, with the reward
+   * probabilities (0–1) that applied to it.
+   */
+  | { type: 'choice'; index: number; door: 'left' | 'right'; reward: boolean; pLeft: number; pRight: number }
+  /** Bandit mode: the player was teleported back to the start for choice `index`. */
+  | { type: 'return'; index: number }
   | { type: 'unknown'; kind: number }
 );
 

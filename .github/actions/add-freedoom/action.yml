@@ -1,18 +1,11 @@
 name: Add Freedoom
-description: Downloads the pinned Freedoom release and puts freedoom2.wad.gz and its licence files into public/wads.
+description: Fetches the Freedoom release pinned in src/paradigms/iwad.json and builds the trimmed IWAD from it into public/wads, with Freedoom's licence files.
 
 runs:
   using: composite
   steps:
-    # Public demo IWAD until the trimmed one (M4); Pages sends .wad files uncompressed.
+    # freedoom2.wad itself stays out of the build (vite.config.ts DEV_ONLY_WADS).
     - shell: bash
-      env:
-        FREEDOOM_VERSION: 0.13.0
-        FREEDOOM_SHA256: 3f9b264f3e3ce503b4fb7f6bdcb1f419d93c7b546f4df3e874dd878db9688f59
       run: |
-        curl -fsSL -o freedoom.zip "https://github.com/freedoom/freedoom/releases/download/v$FREEDOOM_VERSION/freedoom-$FREEDOOM_VERSION.zip"
-        echo "$FREEDOOM_SHA256  freedoom.zip" | sha256sum -c -
-        unzip -j freedoom.zip "freedoom-$FREEDOOM_VERSION/freedoom2.wad" "freedoom-$FREEDOOM_VERSION/COPYING.txt" "freedoom-$FREEDOOM_VERSION/CREDITS.txt" -d freedoom
-        gzip -9 -n -c freedoom/freedoom2.wad > public/wads/freedoom2.wad.gz
-        cp freedoom/COPYING.txt public/wads/freedoom-COPYING.txt
-        cp freedoom/CREDITS.txt public/wads/freedoom-CREDITS.txt
+        npm run fetch:freedoom
+        npm run build:iwad

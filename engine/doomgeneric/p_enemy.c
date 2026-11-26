@@ -589,6 +589,10 @@ void A_KeenDie (mobj_t* mo)
 void A_Look (mobj_t* actor)
 {
     mobj_t*	targ;
+
+    // jspsych-fps-lab: passive monsters (dg_mode.c) never wake up.
+    if (actor->dg_passive)
+	return;
 	
     actor->threshold = 0;	// any shot will wake up
     targ = actor->subsector->sector->soundtarget;
@@ -657,6 +661,13 @@ void A_Look (mobj_t* actor)
 void A_Chase (mobj_t*	actor)
 {
     int		delta;
+
+    // jspsych-fps-lab: passive monsters (dg_mode.c) go back to standing after pain.
+    if (actor->dg_passive)
+    {
+	P_SetMobjState (actor, actor->info->spawnstate);
+	return;
+    }
 
     if (actor->reactiontime)
 	actor->reactiontime--;

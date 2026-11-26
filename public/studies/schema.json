@@ -33,8 +33,14 @@
       "type": "boolean"
     },
     "iwad": {
-      "description": "The game data loaded at start. Development builds play miniwad unless ?iwad= is given.",
-      "enum": ["freedoom2.wad"]
+      "description": "The game data loaded at start (gzipped): the trimmed Freedoom IWAD (npm run build:iwad), whose classic levels are listed in src/paradigms/iwad.json. Development builds also take ?iwad=<name>.wad, e.g. miniwad.wad or freedoom2.wad.",
+      "enum": ["freedoom2-lab.wad"]
+    },
+    "wads": {
+      "description": "Map WADs (PWADs) loaded after the IWAD, from public/wads/manifest.json (npm run build:maps). Their maps replace the IWAD's in the same MAPxx slots.",
+      "type": "array",
+      "maxItems": 8,
+      "items": { "type": "string", "pattern": "^[a-z0-9-]+\\.wad$" }
     },
     "face": {
       "description": "Status-bar face: \"freedoom\" (the IWAD's own) or a face id (M4).",
@@ -134,7 +140,11 @@
       "additionalProperties": false,
       "required": ["map", "time_limit"],
       "properties": {
-        "map": { "description": "MAPxx number.", "type": "integer", "minimum": 1, "maximum": 32 },
+        "paradigm": {
+          "description": "classic: a level of the IWAD; maze, threat-corridor or two-door-bandit: a map of that paradigm from the study's wads. Default classic.",
+          "enum": ["classic", "maze", "threat-corridor", "two-door-bandit"]
+        },
+        "map": { "description": "MAPxx number; for maze, threat-corridor and two-door-bandit trials a slot of such a map in the study's wads.", "type": "integer", "minimum": 1, "maximum": 32 },
         "skill": { "description": "1-5 as in Doom's menu; default 3.", "type": "integer", "minimum": 1, "maximum": 5 },
         "time_limit": {
           "description": "Seconds of game time (pauses don't count); at most 15 minutes.",
@@ -142,13 +152,23 @@
           "exclusiveMinimum": 0,
           "maximum": 900
         },
+        "params": {
+          "description": "The paradigm's parameters (src/paradigms/registry.ts); missing ones take their defaults. Only threat-corridor and two-door-bandit have any.",
+          "type": "object"
+        },
+        "seed": {
+          "description": "Seed of the paradigm's randomness (threat-corridor: delays and spawn spots; two-door-bandit: rewards and drift). Left out: drawn per trial when it starts, and recorded.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
         "no_monsters": { "type": "boolean" },
         "sound": { "type": "boolean" },
         "hud": { "description": "Status bar and pickup messages; false gives a full-height view. Default true.", "type": "boolean" },
         "automap": { "description": "Tab opens the automap (the 3D view, and so monster visibility, is off while it is open). Default false.", "type": "boolean" },
         "prompt_html": { "description": "Shown over the game until the participant clicks to start.", "type": "string" },
         "measures": {
-          "description": "Measure ids, or {id, params}. Default: all measures.",
+          "description": "Measure ids, or {id, params}. Default: the paradigm's default measures (classic: all).",
           "type": "array",
           "minItems": 1,
           "items": {

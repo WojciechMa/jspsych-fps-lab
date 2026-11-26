@@ -1,9 +1,10 @@
-// Boots one study: jatos.js (inside JATOS), the study config, the IWAD and the engine, then runs
-// the study's timeline.
+// Boots one study: jatos.js (inside JATOS), the study config, the IWAD and map WADs and the
+// engine, then runs the study's timeline.
 import 'jspsych/css/jspsych.css';
 import './style.css';
 import { initJsPsych } from 'jspsych';
 import { DoomEngine } from './engine/engine';
+import { IWAD } from './paradigms/manifest';
 import { useDoomEngine } from './plugins/plugin-doom-trial';
 import { createSaveTarget, waitForJatos } from './save/targets';
 import { fetchJson, loadStudy } from './study/config';
@@ -58,24 +59,37 @@ async function main(): Promise<void> {
   const input = jatos?.componentInput as { study?: unknown } | undefined;
   const studyId = jatos ? input?.study : (query.get('study') ?? 'demo');
   if (typeof studyId !== 'string') throw new Error('The JATOS component input needs {"study": "<id>"}.');
-  const config = await loadStudy(studyId, fetchJson);
+  const { config, manifest } = await loadStudy(studyId, fetchJson);
   const target = createSaveTarget(config, jatos);
   document.title = config.title;
 
-  // Dev builds play miniwad, or ?iwad=<name>.wad from public/wads; production loads the study's
-  // IWAD gzipped.
-  const iwad = config.iwad ?? 'freedoom2.wad';
-  const requestedIwad = query.get('iwad');
-  const devIwad = requestedIwad && /^[a-z0-9-]+\.wad$/.test(requestedIwad) ? requestedIwad : 'miniwad.wad';
-  const wad = import.meta.env.DEV
-    ? { name: devIwad, url: `${import.meta.env.BASE_URL}wads/${devIwad}` }
-    : { name: iwad, url: `${import.meta.env.BASE_URL}wads/${iwad}.gz` };
+  // The study's IWAD, gzipped; dev builds also take ?iwad=<name>.wad from public/wads (e.g. miniwad).
+  const iwad = config.iwad ?? IWAD.name;
+  const requestedIwad = import.meta.env.DEV ? query.get('iwad') : null;
+  const wad =
+    requestedIwad && /^[a-z0-9-]+\.wad$/.test(requestedIwad)
+      ? { name: requestedIwad, url: `${import.meta.env.BASE_URL}wads/${requestedIwad}` }
+      : { name: iwad, url: `${import.meta.env.BASE_URL}wads/${iwad}.gz` };
   const data = await fetchWithProgress(wad.url, (fraction) => {
     progress.value = fraction;
+  }).catch((error: unknown) => {
+    if (!import.meta.env.DEV) throw error;
+    throw new Error(`${String(error)}. Put ${wad.url.split('/').pop()} into public/wads, as .github/actions/add-freedoom does.`);
   });
+  // Map WADs are small and served as they are.
+  const pwads = await Promise.all(
+    (config.wads ?? []).map(async (name) => ({
+      name,
+      data: await fetchWithProgress(`${import.meta.env.BASE_URL}wads/${name}`, () => {}),
+    })),
+  );
   progress.hidden = true;
   message.textContent = 'Starting the engine…';
-  useDoomEngine(await DoomEngine.create({ name: wad.name, data }));
+  const doom = await DoomEngine.create({ name: wad.name, data }, pwads);
+  for (const { name, sha256 } of doom.info.wads.slice(1)) {
+    if (sha256 !== manifest.wads[name].sha256) throw new Error(`wads/${name} doesn't match wads/manifest.json; run npm run build:maps.`);
+  }
+  useDoomEngine(doom);
   loader.remove();
 
   // Stored as data only, never put into the page.
@@ -101,7 +115,7 @@ async function main(): Promise<void> {
     },
   });
   jsPsych.data.addProperties({ study_id: studyId, save_target: target.id, url_params: urlParams });
-  const { timeline, session } = buildTimeline(jsPsych, config, target, dataFileName);
+  const { timeline, session } = buildTimeline(jsPsych, config, manifest, target, dataFileName);
   await jsPsych.run(timeline);
 }
 

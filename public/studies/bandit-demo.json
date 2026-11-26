@@ -1,0 +1,32 @@
+{
+  "$schema": "./schema.json",
+  "title": "Two-door bandit demo",
+  "consent_html": "<p>This is a demo of the two-door-bandit paradigm of jspsych-fps-lab. You choose again and again between two doors; each choice may or may not score a point. There are no monsters.</p>",
+  "instructions_html": "<h1>How to play</h1><p>W A S D move and the mouse turns. Esc pauses the game.</p><p>Walk through the left or the right door. Behind it you either score a point (a yellow flash and a chime) or not (a grunt), and are then taken back to the start. One door scores more often than the other, and which one can change. Try to score as many points as you can.</p>",
+  "wads": ["two-door-bandit.wad"],
+  "save": { "target": "download" },
+  "blocks": [
+    {
+      "name": "practice",
+      "practice": true,
+      "trials": [
+        { "paradigm": "two-door-bandit", "map": 12, "skill": 3, "time_limit": 120, "params": { "choices": 6, "p_left": 0.5, "p_right": 0.5 }, "seed": 1 }
+      ]
+    },
+    {
+      "name": "test",
+      "trials": [
+        { "paradigm": "two-door-bandit", "map": 12, "skill": 3, "time_limit": 300, "params": { "p_left": 0.8, "p_right": 0.2, "reversals": [20] } },
+        { "paradigm": "two-door-bandit", "map": 12, "skill": 3, "time_limit": 300, "params": { "schedule": "drifting", "p_left": 0.5, "p_right": 0.5, "drift_sd": 0.05 } }
+      ]
+    }
+  ],
+  "questionnaires": [
+    {
+      "type": "text",
+      "questions": [
+        { "name": "strategy", "prompt": "How did you decide which door to take?", "rows": 3 }
+      ]
+    }
+  ]
+}

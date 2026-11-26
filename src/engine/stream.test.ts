@@ -72,4 +72,24 @@ describe('StreamDecoder', () => {
       { tic: 3, type: 'unknown', kind: 99 },
     ]);
   });
+
+  it('decodes mode spawns and the "complete" end', () => {
+    const { calls, sink } = collect();
+    new StreamDecoder(sink).add(Int32Array.from([2, 7, 14, 40, 3, 21, 5, 2, 0, 5, 2, 6, 90]), 0, new Map());
+    expect(calls.events).toEqual([{ tic: 40, type: 'spawn', index: 3, id: 21, spot: 5, thingType: 2 }]);
+    expect(calls.ends).toEqual([['complete', 90]]);
+  });
+
+  it('decodes bandit choices and returns', () => {
+    const { calls, sink } = collect();
+    new StreamDecoder(sink).add(
+      Int32Array.from([2, 7, 15, 50, 2, 1, 1, 0.75 * FU, 0.25 * FU, 2, 7, 16, 85, 3, 0, 0, 0, 0]),
+      0,
+      new Map(),
+    );
+    expect(calls.events).toEqual([
+      { tic: 50, type: 'choice', index: 2, door: 'right', reward: true, pLeft: 0.75, pRight: 0.25 },
+      { tic: 85, type: 'return', index: 3 },
+    ]);
+  });
 });

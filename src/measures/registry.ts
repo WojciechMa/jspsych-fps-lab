@@ -1,5 +1,6 @@
 // All measures, parameter checking and the participant-facing list of what is recorded.
 import { aiming } from './aiming';
+import { bandit } from './bandit';
 import { demo } from './demo';
 import { inputLog } from './input-log';
 import { risk } from './risk';
@@ -7,17 +8,19 @@ import { roi } from './roi';
 import { sessionQuality } from './session-quality';
 import { threatRt } from './threat-rt';
 import { trajectory } from './trajectory';
-import type { Measure, ParamSchema } from './types';
+import type { Measure, ParamSchema, ParamsSchema } from './types';
 
 // Measures differ in their parameter types; resolveParams checks them against each schema.
 export type AnyMeasure = Measure<any>;
 
 export const MEASURES: readonly AnyMeasure[] = [
-  sessionQuality, inputLog, trajectory, roi, threatRt, aiming, risk, demo,
+  sessionQuality, inputLog, trajectory, roi, threatRt, aiming, risk, bandit, demo,
 ];
 
-/** Used when a trial doesn't list its measures ("classic" until paradigms define their own). */
-export const DEFAULT_MEASURES: readonly string[] = MEASURES.map((measure) => measure.id);
+/** The MVP measures, used when a classic trial doesn't list its measures. */
+export const DEFAULT_MEASURES: readonly string[] = [
+  'session_quality', 'input_log', 'trajectory', 'roi', 'threat_rt', 'aiming', 'risk', 'demo',
+];
 
 /** A measure as a trial or study config names it. */
 export type MeasureSpec = string | { id: string; params?: Record<string, unknown> };
@@ -28,17 +31,20 @@ export function getMeasure(id: string): AnyMeasure {
   return measure;
 }
 
-/** Fills in defaults and rejects unknown or invalid parameters. */
-export function resolveParams(measure: AnyMeasure, given: Record<string, unknown> = {}): Record<string, unknown> {
+/** Fills in defaults and rejects unknown or invalid parameters (of a measure or a paradigm). */
+export function resolveParams(
+  owner: { id: string; paramsSchema: ParamsSchema },
+  given: Record<string, unknown> = {},
+): Record<string, unknown> {
   const params: Record<string, unknown> = {};
-  for (const [name, schema] of Object.entries(measure.paramsSchema.properties)) {
+  for (const [name, schema] of Object.entries(owner.paramsSchema.properties)) {
     params[name] = Array.isArray(schema.default) ? [...schema.default] : schema.default;
   }
   for (const [name, value] of Object.entries(given)) {
-    const schema = measure.paramsSchema.properties[name];
-    if (!schema) throw new Error(`${measure.id}: unknown parameter "${name}".`);
+    const schema = owner.paramsSchema.properties[name];
+    if (!schema) throw new Error(`${owner.id}: unknown parameter "${name}".`);
     const problem = checkParam(schema, value);
-    if (problem) throw new Error(`${measure.id}.${name} ${problem}.`);
+    if (problem) throw new Error(`${owner.id}.${name} ${problem}.`);
     params[name] = value;
   }
   return params;

@@ -1,0 +1,13 @@
+{
+  "$comment": "The trimmed IWAD studies load, built by npm run build:iwad from Freedoom Phase 2 (source: the pinned release, fetched by npm run fetch:freedoom): these classic maps plus the textures and flats the map WADs in public/wads/manifest.json need. Changing the maps, the map WADs or the trimming changes sha256: rebuild with npm run build:iwad -- --update.",
+  "name": "freedoom2-lab.wad",
+  "source": {
+    "release": "0.13.0",
+    "url": "https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip",
+    "zip_sha256": "3f9b264f3e3ce503b4fb7f6bdcb1f419d93c7b546f4df3e874dd878db9688f59",
+    "name": "freedoom2.wad",
+    "sha256": "a8772e088847032510d97ba2312406a6998f21cbab44d4ff10696faa9c0ecd4b"
+  },
+  "maps": [1, 2, 6],
+  "sha256": "321a2c49d5cc02cd9c83f5ec16a25e60f7b9fa36ee16b3c1b6e526ae752ae89b"
+}

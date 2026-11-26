@@ -1,0 +1,12 @@
+{
+  "$comment": "Maze maps for the maze paradigm. npm run build:maps turns this file into public/wads/maze.wad and its entry in public/wads/manifest.json. Changing a seed or size changes the map: give changed maps a new name.",
+  "wad": "maze.wad",
+  "paradigm": "maze",
+  "maps": [
+    { "slot": 1, "name": "maze-practice", "cols": 3, "rows": 3, "seed": 1 },
+    { "slot": 2, "name": "maze-6x6-a", "cols": 6, "rows": 6, "seed": 601 },
+    { "slot": 3, "name": "maze-6x6-b", "cols": 6, "rows": 6, "seed": 602 },
+    { "slot": 4, "name": "maze-9x9-a", "cols": 9, "rows": 9, "seed": 901 },
+    { "slot": 5, "name": "maze-9x9-b", "cols": 9, "rows": 9, "seed": 902 }
+  ]
+}

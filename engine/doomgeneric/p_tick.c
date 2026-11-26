@@ -23,6 +23,8 @@
 
 #include "doomstat.h"
 
+#include "dg_mode.h"
+
 
 int	leveltime;
 
@@ -145,6 +147,8 @@ void P_Ticker (void)
     P_RunThinkers ();
     P_UpdateSpecials ();
     P_RespawnSpecials ();
+    // jspsych-fps-lab: paradigm mode logic
+    DG_ModeTicker ();
 
     // for par times
     leveltime++;	

@@ -1,0 +1,9 @@
+{
+  "$comment": "Corridor maps for the threat-corridor paradigm. npm run build:maps turns this file into public/wads/threat-corridor.wad and its entry in public/wads/manifest.json. pairs = side alcove pairs; there is always one alcove behind and one ahead. Changing a map changes its spot numbers: give changed maps a new name.",
+  "wad": "threat-corridor.wad",
+  "paradigm": "threat-corridor",
+  "maps": [
+    { "slot": 10, "name": "corridor-short", "pairs": 1 },
+    { "slot": 11, "name": "corridor-long", "pairs": 3 }
+  ]
+}

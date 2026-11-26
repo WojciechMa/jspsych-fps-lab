@@ -4,8 +4,9 @@
 import { type JsPsych, type JsPsychPlugin, ParameterType, type TrialType } from 'jspsych';
 import type { DoomEngine } from '../engine/engine';
 import type { TrialEnd } from '../engine/types';
-import { DEFAULT_MEASURES, type MeasureSpec } from '../measures/registry';
+import type { MeasureSpec } from '../measures/registry';
 import { MeasureRunner } from '../measures/runner';
+import { getParadigm, randomSeed, resolveParadigmParams } from '../paradigms/registry';
 
 let engine: DoomEngine | null = null;
 
@@ -16,10 +17,18 @@ export function useDoomEngine(instance: DoomEngine): void {
 
 const info = <const>{
   name: 'doom-trial',
-  version: '0.3.0',
+  version: '0.5.0',
   parameters: {
+    /** Paradigm id (src/paradigms/registry.ts). */
+    paradigm: { type: ParameterType.STRING, default: 'classic' },
+    /** The paradigm's parameters; missing ones take their defaults. */
+    params: { type: ParameterType.COMPLEX, default: null },
+    /** Seed (uint32) of the paradigm's randomness; null = drawn now. Unused by mode 0 (recorded as null). */
+    seed: { type: ParameterType.INT, default: null },
     /** MAPxx number to play. */
     map: { type: ParameterType.INT, default: 1 },
+    /** Name of the map in public/wads/manifest.json; null for IWAD levels. */
+    map_name: { type: ParameterType.STRING, default: null },
     /** 1–5 as in Doom's menu; 3 is "Hurt me plenty". */
     skill: { type: ParameterType.INT, default: 3 },
     /** Limit in seconds of game time (pauses don't count); null for none. */
@@ -32,17 +41,20 @@ const info = <const>{
     automap: { type: ParameterType.BOOL, default: false },
     /** Play in full screen: a click outside full screen first switches back to it. */
     fullscreen: { type: ParameterType.BOOL, default: false },
-    /** Measure ids, or { id, params } objects; null = DEFAULT_MEASURES. */
+    /** Measure ids, or { id, params } objects; null = the paradigm's default measures. */
     measures: { type: ParameterType.COMPLEX, default: null },
     /** Shown over the game until the participant clicks to start. */
     prompt: { type: ParameterType.HTML_STRING, default: '<p>Click to start.</p>' },
   },
   data: {
     paradigm: { type: ParameterType.STRING },
+    paradigm_version: { type: ParameterType.STRING },
     mode: { type: ParameterType.INT },
+    params: { type: ParameterType.COMPLEX },
     seed: { type: ParameterType.INT },
     input_profile: { type: ParameterType.STRING },
     map: { type: ParameterType.INT },
+    map_name: { type: ParameterType.STRING },
     skill: { type: ParameterType.INT },
     time_limit: { type: ParameterType.FLOAT },
     no_monsters: { type: ParameterType.BOOL },
@@ -50,7 +62,7 @@ const info = <const>{
     hud: { type: ParameterType.BOOL },
     automap: { type: ParameterType.BOOL },
     fullscreen: { type: ParameterType.BOOL },
-    /** exit, secret_exit, death, timeout, aborted or error. */
+    /** exit, secret_exit, death, timeout, complete, aborted or error. */
     end_reason: { type: ParameterType.STRING },
     error: { type: ParameterType.STRING },
     duration_tics: { type: ParameterType.INT },
@@ -76,13 +88,17 @@ class DoomTrialPlugin implements JsPsychPlugin<Info> {
   async trial(display_element: HTMLElement, trial: TrialType<Info>) {
     if (!engine) throw new Error('doom-trial: call useDoomEngine() before running a trial.');
     const doom = engine;
-    // Classic Doom (mode 0) until the paradigm registry exists (M4).
+    const paradigm = getParadigm(trial.paradigm ?? 'classic');
+    const params = resolveParadigmParams(paradigm, (trial.params as Record<string, unknown> | null) ?? {});
     const settings = {
-      paradigm: 'classic',
-      mode: 0,
-      seed: null,
+      paradigm: paradigm.id,
+      paradigm_version: paradigm.version,
+      mode: paradigm.mode,
+      params,
+      seed: paradigm.mode === 0 ? null : (trial.seed ?? randomSeed()),
       input_profile: 'keyboard-mouse',
       map: trial.map ?? 1,
+      map_name: trial.map_name ?? null,
       skill: trial.skill ?? 3,
       time_limit: trial.time_limit ?? null,
       no_monsters: trial.no_monsters ?? false,
@@ -91,7 +107,7 @@ class DoomTrialPlugin implements JsPsychPlugin<Info> {
       automap: trial.automap ?? false,
       fullscreen: trial.fullscreen ?? false,
     };
-    const runner = new MeasureRunner((trial.measures as MeasureSpec[] | null) ?? DEFAULT_MEASURES);
+    const runner = new MeasureRunner((trial.measures as MeasureSpec[] | null) ?? paradigm.defaultMeasures);
 
     const stage = document.createElement('div');
     stage.className = 'doom-stage';
@@ -138,6 +154,9 @@ class DoomTrialPlugin implements JsPsychPlugin<Info> {
               sound: settings.sound,
               hud: settings.hud,
               automap: settings.automap,
+              mode: settings.mode,
+              modeParams: paradigm.engineParams(params),
+              seed: settings.seed ?? 0,
             },
             runner,
           )
@@ -147,7 +166,7 @@ class DoomTrialPlugin implements JsPsychPlugin<Info> {
                 {
                   paradigm: settings.paradigm,
                   mode: settings.mode,
-                  params: {},
+                  params: settings.params,
                   seed: settings.seed,
                   map: settings.map,
                   skill: settings.skill,

@@ -1,0 +1,8 @@
+{
+  "$comment": "Maps for the two-door-bandit paradigm. npm run build:maps turns this file into public/wads/two-door-bandit.wad and its entry in public/wads/manifest.json. The layout is fixed (scripts/lib/bandit.mjs); reward schedules are trial params, not maps.",
+  "wad": "two-door-bandit.wad",
+  "paradigm": "two-door-bandit",
+  "maps": [
+    { "slot": 12, "name": "two-doors" }
+  ]
+}
